@@ -21,6 +21,20 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # GoReleaser builds the images for two platforms in one buildx pass and
+      # pushes them, so the runner needs emulation, a buildx builder and a
+      # registry login before it starts. Without the login the run fails at the
+      # push, after the GitHub release and the Homebrew cask have already been
+      # published - a half-finished release is worse than none.
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
