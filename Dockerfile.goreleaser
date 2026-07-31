@@ -1,0 +1,12 @@
+# Release image, assembled by GoReleaser from an already version-stamped binary.
+# dockers_v2 builds one image for several platforms in a single buildx pass and
+# lays the context out per platform, so the copy has to be TARGETPLATFORM-aware -
+# a bare `COPY nexdns` finds nothing.
+FROM alpine:3.23
+
+RUN apk add --no-cache ca-certificates
+
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/nexdns /usr/local/bin/nexdns
+
+ENTRYPOINT ["nexdns"]

@@ -1,0 +1,89 @@
+version: 2
+
+# Without this, ProjectName defaults to the repository name (cli) and every archive
+# ships as cli_<version>_<os>_<arch> - while scripts/install.sh and the README both
+# fetch nexdns_<version>_<os>_<arch>.
+project_name: nexdns
+
+builds:
+  - main: ./cmd/nexdns
+    binary: nexdns
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/nexdns/cli/internal/version.Version={{.Version}}
+      - -X github.com/nexdns/cli/internal/version.Commit={{.Commit}}
+      - -X github.com/nexdns/cli/internal/version.Date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: "386"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+homebrew_casks:
+  - name: nexdns-cli
+    binaries: [nexdns]
+    repository:
+      owner: nexdns
+      name: homebrew-tap
+    homepage: "https://nexdns.tech"
+    description: "CLI tool for managing DNS zones and records via the NexDNS API"
+    license: "Apache-2.0"
+    hooks:
+      post:
+        install: |
+          # Homebrew installs the binary unsigned; clear the quarantine flag so
+          # macOS does not refuse to run it on first launch.
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr",
+                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/nexdns"]
+          end
+
+# dockers_v2 builds every platform in one entry and pushes the manifest itself,
+# so there is no separate docker_manifests block to keep in step.
+dockers_v2:
+  - images:
+      - nexdns/cli
+    dockerfile: Dockerfile.goreleaser
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{ .Version }}"
+      - latest
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      # A literal, not the GitURL template variable: that resolves to whatever
+      # remote the build happens to run against, which here is the internal one.
+      org.opencontainers.image.source: "https://github.com/nexdns/cli"
+      org.opencontainers.image.licenses: Apache-2.0
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"

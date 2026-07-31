@@ -1,0 +1,17 @@
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage.txt
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+
+# Python build artifacts (contrib/ packages: certbot, octodns)
+contrib/*/build/
+contrib/*/*.egg-info/
+
+# macOS
+.DS_Store
