@@ -26,6 +26,23 @@ jobs:
       # registry login before it starts. Without the login the run fails at the
       # push, after the GitHub release and the Homebrew cask have already been
       # published - a half-finished release is worse than none.
+      # A missing secret reaches docker/login-action as an empty password and
+      # surfaces as "Username and password required", which says nothing about
+      # which secret, in which repository, or under which tab it was expected.
+      - name: Registry credentials are present
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "${DOCKERHUB_TOKEN}" ]; then
+            echo "::error::DOCKERHUB_TOKEN is empty or unset in this repository."
+            echo "It must be an Actions *repository* secret - Settings -> Secrets and"
+            echo "variables -> Actions -> Repository secrets. A secret added under the"
+            echo "Codespaces or Dependabot tab, or scoped to an environment this job"
+            echo "does not declare, is invisible here."
+            exit 1
+          fi
+          echo "DOCKERHUB_TOKEN is present (${#DOCKERHUB_TOKEN} characters)."
+
       - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
