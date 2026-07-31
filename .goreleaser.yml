@@ -42,6 +42,11 @@ homebrew_casks:
     repository:
       owner: nexdns
       name: homebrew-tap
+      # Without this GoReleaser falls back to GITHUB_TOKEN, which Actions scopes
+      # to the repository it runs in - the push to the tap then fails with
+      # "Resource not accessible by integration", naming neither the token nor
+      # the repository it lacked access to.
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://nexdns.tech"
     description: "CLI tool for managing DNS zones and records via the NexDNS API"
     license: "Apache-2.0"
