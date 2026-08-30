@@ -42,7 +42,9 @@ An account on a plan that includes API access, and an API key created at [nexdns
 curl -sL https://get.nexdns.tech/cli | sh
 ```
 
-Detects your platform, downloads the matching release archive, verifies it against the `checksums.txt` published with the release, and installs to `/usr/local/bin`. Read it first with `curl https://get.nexdns.tech/cli` if you would rather not pipe an unread script to a shell - the same file is in this repository at [`scripts/install.sh`](scripts/install.sh).
+Detects your platform, downloads the matching archive from the same host that served the script, verifies it against the `checksums.txt` published beside it, and installs to `/usr/local/bin`. Read it first with `curl https://get.nexdns.tech/cli` if you would rather not pipe an unread script to a shell - the same file is in this repository at [`scripts/install.sh`](scripts/install.sh).
+
+`https://get.nexdns.tech/cli/latest` names the version currently served, and `https://get.nexdns.tech/cli/download/<version>/` holds the archives and their `checksums.txt`.
 
 ### Homebrew (macOS, Linux)
 

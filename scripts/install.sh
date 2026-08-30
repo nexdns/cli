@@ -3,7 +3,12 @@
 # Usage: curl -sL https://get.nexdns.tech/cli | sh
 set -e
 
-REPO="nexdns/cli"
+# Everything is fetched from the instance that served this script. The script
+# itself already runs unconditionally on the caller's machine, so the binary it
+# installs should not come from a different party than the script did - and an
+# install must not fail because a third-party host is unreachable from the
+# caller's network.
+HOST="get.nexdns.tech"
 BINARY="nexdns"
 INSTALL_DIR="/usr/local/bin"
 
@@ -33,56 +38,70 @@ case "$OS" in
         ;;
 esac
 
-# Get latest release tag from the GitHub API
+# Ask the instance which version it holds. It answers with what is on its own
+# disk, so the version named here is one it can also serve; an instance that is
+# behind installs an older CLI rather than pointing at an archive it lacks.
 echo "Detecting latest version..."
-LATEST=$(curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | grep -o '"tag_name":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+LATEST=$(curl -fsSL "https://${HOST}/cli/latest" | tr -d ' \t\r\n')
 
 if [ -z "$LATEST" ]; then
-    echo "Error: could not detect latest version. Check https://github.com/${REPO}/releases"
+    echo "Error: could not detect latest version. Check https://${HOST}/cli/latest"
     exit 1
 fi
 
 # Release archives are named nexdns_<version>_<os>_<arch>.tar.gz (version has no leading 'v')
 VERSION="${LATEST#v}"
 FILENAME="${BINARY}_${VERSION}_${OS}_${ARCH}.tar.gz"
-URL="https://github.com/${REPO}/releases/download/${LATEST}/${FILENAME}"
+BASE_URL="https://${HOST}/cli/download/${LATEST}"
+URL="${BASE_URL}/${FILENAME}"
 
 echo "Downloading ${BINARY} ${LATEST} for ${OS}/${ARCH}..."
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-curl -fsSL "$URL" -o "${TMP_DIR}/${FILENAME}"
+if ! curl -fsSL "$URL" -o "${TMP_DIR}/${FILENAME}"; then
+    echo "Error: could not download ${URL}"
+    echo "  ${HOST} named ${LATEST} moments ago. Either it is being"
+    echo "  re-published right now - retry in a minute - or that release was"
+    echo "  built without a ${OS}/${ARCH} archive."
+    exit 1
+fi
 
-# Verify against the checksums file published with the release. sha256sum is
-# GNU, shasum is the BSD/macOS spelling; if neither exists, say so rather than
-# pretending the download was checked.
+# Verify against the checksums file published beside the archive. Every branch
+# below ends the run rather than continuing: this script is piped to a shell, so
+# bytes that could not be checked do not get installed. sha256sum is the GNU
+# spelling, shasum the BSD/macOS one.
 echo "Verifying checksum..."
-if curl -fsSL "https://github.com/${REPO}/releases/download/${LATEST}/checksums.txt" \
-        -o "${TMP_DIR}/checksums.txt"; then
-    if command -v sha256sum >/dev/null 2>&1; then
-        SUM=$(sha256sum "${TMP_DIR}/${FILENAME}" | cut -d" " -f1)
-    elif command -v shasum >/dev/null 2>&1; then
-        SUM=$(shasum -a 256 "${TMP_DIR}/${FILENAME}" | cut -d" " -f1)
-    else
-        SUM=""
-        echo "Warning: no sha256 tool found, skipping verification"
-    fi
+if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt"; then
+    echo "Error: could not download ${BASE_URL}/checksums.txt"
+    echo "  ${HOST} named ${LATEST} moments ago, and it only names a version"
+    echo "  whose manifest is in place, so this is most likely a release being"
+    echo "  re-published right now. Retry in a minute. If it persists, the"
+    echo "  server's artifacts directory is incomplete and needs re-syncing."
+    exit 1
+fi
 
-    if [ -n "$SUM" ]; then
-        EXPECTED=$(grep " ${FILENAME}\$" "${TMP_DIR}/checksums.txt" | cut -d" " -f1)
-        if [ -z "$EXPECTED" ]; then
-            echo "Error: ${FILENAME} is not listed in checksums.txt"
-            exit 1
-        fi
-        if [ "$SUM" != "$EXPECTED" ]; then
-            echo "Error: checksum mismatch for ${FILENAME}"
-            echo "  expected: ${EXPECTED}"
-            echo "  actual:   ${SUM}"
-            exit 1
-        fi
-    fi
+if command -v sha256sum >/dev/null 2>&1; then
+    SUM=$(sha256sum "${TMP_DIR}/${FILENAME}" | cut -d" " -f1)
+elif command -v shasum >/dev/null 2>&1; then
+    SUM=$(shasum -a 256 "${TMP_DIR}/${FILENAME}" | cut -d" " -f1)
 else
-    echo "Warning: checksums.txt could not be downloaded, skipping verification"
+    echo "Error: no sha256 tool available, so ${FILENAME} cannot be verified."
+    echo "  Install coreutils (sha256sum) or perl-shasum and run this again."
+    exit 1
+fi
+
+EXPECTED=$(grep " ${FILENAME}\$" "${TMP_DIR}/checksums.txt" | cut -d" " -f1)
+if [ -z "$EXPECTED" ]; then
+    echo "Error: ${FILENAME} is not listed in checksums.txt"
+    echo "  The manifest on ${HOST} does not describe the archive beside it."
+    exit 1
+fi
+if [ "$SUM" != "$EXPECTED" ]; then
+    echo "Error: checksum mismatch for ${FILENAME}"
+    echo "  expected: ${EXPECTED}"
+    echo "  actual:   ${SUM}"
+    exit 1
 fi
 
 echo "Extracting..."
