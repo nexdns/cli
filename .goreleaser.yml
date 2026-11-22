@@ -42,16 +42,15 @@ homebrew_casks:
       name: homebrew-tap
       # GITHUB_TOKEN cannot write to another repository.
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://nexdns.tech"
+    homepage: "https://nexdns.tech/"
     description: "CLI tool for managing DNS zones and records via the NexDNS API"
     license: "Apache-2.0"
+    # The binary is unsigned; clear the quarantine flag so macOS runs it.
     hooks:
       post:
-        install: |
-          # The binary is unsigned; clear the quarantine flag so macOS runs it.
-          if OS.mac?
-            system_command "/usr/bin/xattr",
-                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/nexdns"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/nexdns"]
           end
 
 dockers_v2:

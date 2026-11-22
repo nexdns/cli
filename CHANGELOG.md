@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Homebrew cask clears the macOS quarantine flag with Homebrew's install
+  steps instead of a Ruby `postflight` block, which current Homebrew warns about
+  on every install. It needs Homebrew 5.1.14 or later; `brew install` updates
+  Homebrew first unless that is turned off. The 1.0.2 cask in the tap already
+  uses them.
+
 ### Fixed
 
 - The Homebrew cask installs on Linux. Its quarantine step ran macOS's `xattr`,
