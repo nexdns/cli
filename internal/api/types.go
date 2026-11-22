@@ -31,7 +31,7 @@ type ZoneListItem struct {
 	ID   string `json:"id" yaml:"id"`
 	Name string `json:"name" yaml:"name"`
 	// UnicodeName is the native-script form of an internationalized name
-	// (`тест.рф` for `xn--e1aybc.xn--p1ai`); equal to Name for ASCII zones.
+	// (`bücher.example` for `xn--bcher-kva.example`); equal to Name for ASCII zones.
 	UnicodeName  string `json:"unicode_name,omitempty" yaml:"unicode_name,omitempty"`
 	Type         string `json:"type" yaml:"type"`
 	Status       string `json:"status" yaml:"status"`
@@ -75,9 +75,8 @@ type Record struct {
 	Fields      map[string]interface{} `json:"fields,omitempty" yaml:"fields,omitempty"`
 }
 
-// Webhook represents an outbound event subscription: one of the caller's own
-// endpoints plus the events it is subscribed to. The signing secret is not part
-// of it - the API returns that once, on creation ({@see CreatedWebhook}).
+// Webhook is an outbound event subscription: an endpoint and the events it
+// receives. The signing secret is only returned on creation (CreatedWebhook).
 type Webhook struct {
 	ID          string   `json:"id" yaml:"id"`
 	URL         string   `json:"url" yaml:"url"`
@@ -121,9 +120,8 @@ type CreateWebhookRequest struct {
 	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
-// UpdateWebhookRequest represents a request to update a webhook. The endpoint is
-// a full replace, not a patch: `url` and `events` are always required, so a
-// caller changing one field sends the others as they stand.
+// UpdateWebhookRequest represents a request to update a webhook. The update
+// replaces the whole webhook, so url and events are always required.
 type UpdateWebhookRequest struct {
 	URL         string   `json:"url" yaml:"url"`
 	Events      []string `json:"events" yaml:"events"`
@@ -253,9 +251,8 @@ type CreateRecordRequest struct {
 	Name    string `json:"name" yaml:"name"`
 	Type    string `json:"type" yaml:"type"`
 	Content string `json:"content" yaml:"content"`
-	// TTL is a pointer so an absent TTL and a deliberate zero are distinct: the
-	// API keeps the rrset's own TTL when the field is missing, and a plain int
-	// with omitempty could express neither 0 nor a value the API should reject.
+	// TTL is a pointer so that an omitted TTL, which keeps the rrset's TTL, is
+	// distinct from an explicit value.
 	TTL          *int   `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	Priority     *int   `json:"priority,omitempty" yaml:"priority,omitempty"`
 	Weight       *int   `json:"weight,omitempty" yaml:"weight,omitempty"`

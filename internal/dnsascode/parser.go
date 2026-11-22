@@ -49,14 +49,8 @@ func ParseConfigFile(path string) (*ConfigFile, error) {
 	return &cfg, nil
 }
 
-// substituteEnvVars expands every ${VAR} reference and reports the names that
-// had no value, so the caller can refuse the file.
-//
-// Leaving an unresolved reference in place - the previous behaviour - meant a
-// CI run with a missing variable planned to overwrite live data with the literal
-// "${VAR}". For an address type the API refuses it, which turns into a confusing
-// mid-apply validation error; for TXT the string is legal, so the literal would
-// have been published as the record's value.
+// substituteEnvVars expands ${VAR} references and returns the names that had
+// no value, so the caller can reject the file.
 func substituteEnvVars(content string) (string, []string) {
 	var unresolved []string
 	seen := map[string]bool{}

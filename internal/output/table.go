@@ -197,7 +197,7 @@ func (f *TableFormatter) FormatAccount(account *api.Account) {
 	fmt.Fprintf(tw, "Status:\t%s\n", f.statusColor(account.Status))
 	if account.Subscription != nil {
 		fmt.Fprintf(tw, "Plan:\t%s (%s)\n", account.Subscription.Plan, account.Subscription.BillingCycle)
-		fmt.Fprintf(tw, "Period:\t%s – %s\n", account.Subscription.CurrentPeriodStart, account.Subscription.CurrentPeriodEnd)
+		fmt.Fprintf(tw, "Period:\t%s - %s\n", account.Subscription.CurrentPeriodStart, account.Subscription.CurrentPeriodEnd)
 	}
 	tw.Flush()
 }
@@ -278,7 +278,7 @@ func (f *TableFormatter) FormatWebhook(webhook *api.Webhook) {
 	dw := f.newWriter()
 	fmt.Fprintln(dw, f.bold("EVENT")+"\t"+f.bold("TYPE")+"\t"+f.bold("STATUS")+"\t"+f.bold("ATTEMPTS")+"\t"+f.bold("CODE")+"\t"+f.bold("WHEN"))
 	for _, d := range webhook.RecentDeliveries {
-		code := "–"
+		code := "-"
 		if d.LastStatusCode != nil {
 			code = strconv.Itoa(*d.LastStatusCode)
 		}
@@ -291,8 +291,7 @@ func (f *TableFormatter) FormatWebhook(webhook *api.Webhook) {
 	}
 	dw.Flush()
 
-	// The error is the reason someone is reading this table at all, so it is
-	// printed in full under the row rather than truncated into a column.
+	// The error is printed in full under the row.
 	for _, d := range webhook.RecentDeliveries {
 		if d.LastError != "" {
 			fmt.Fprintf(f.w, "\n%s: %s\n", d.EventID, f.red(d.LastError))
@@ -307,8 +306,7 @@ func (f *TableFormatter) activeFlag(active bool) string {
 	return f.red("no")
 }
 
-// failureCount colours a non-zero run of failures: the platform deactivates an
-// endpoint that keeps failing, so the number is a warning, not a statistic.
+// failureCount highlights a non-zero failure count.
 func (f *TableFormatter) failureCount(count int) string {
 	if count == 0 {
 		return "0"
@@ -338,9 +336,8 @@ func formatDate(s string) string {
 	return s
 }
 
-// displayName prefers the native-script form of an internationalized zone name
-// or record label for human-readable output. The machine-readable formats
-// (json/yaml/csv) keep both fields, so scripts still see the canonical ACE name.
+// displayName prefers the Unicode name of an IDN zone or label. JSON, YAML
+// and CSV output keep both fields.
 func displayName(name, unicodeName string) string {
 	if unicodeName != "" && unicodeName != name {
 		return unicodeName

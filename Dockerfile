@@ -1,6 +1,5 @@
-# Local build. The published images come from GoReleaser via
-# Dockerfile.goreleaser, which assembles an already version-stamped binary.
-FROM golang:1.26-alpine AS builder
+# Local build. Release images are built by GoReleaser from Dockerfile.goreleaser.
+FROM golang:1.26.11-alpine AS builder
 
 WORKDIR /app
 
@@ -9,7 +8,6 @@ RUN go mod download
 
 COPY . .
 
-# Without these the binary reports "dev", unlike every other way it is built.
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG DATE=unknown
@@ -20,7 +18,7 @@ RUN CGO_ENABLED=0 go build \
             -X github.com/nexdns/cli/internal/version.Date=${DATE}" \
         -o nexdns ./cmd/nexdns
 
-FROM alpine:3.23
+FROM alpine:3.23.8
 
 RUN apk add --no-cache ca-certificates
 

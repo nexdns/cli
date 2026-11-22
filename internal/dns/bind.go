@@ -37,9 +37,8 @@ func ParseBINDZone(r io.Reader, origin string) ([]ParsedRecord, error) {
 
 	var multiLine strings.Builder
 	inParens := false
-	// RFC 1035 §5.1: a record line that starts with whitespace inherits the owner
-	// name of the previous line. Round-robin blocks are written that way, so
-	// losing the inheritance silently moves records onto the apex.
+	// A line that starts with whitespace inherits the previous owner name
+	// (RFC 1035 section 5.1).
 	lastOwner := "@"
 
 	for scanner.Scan() {
@@ -127,7 +126,7 @@ func ToCreateRequests(records []ParsedRecord) []api.CreateRecordRequest {
 			Name:     r.Name,
 			Type:     r.Type,
 			Content:  r.Content,
-			TTL:      ttlPtr(r.TTL),
+			TTL:      api.OptionalTTL(r.TTL),
 			Priority: r.Priority,
 			Weight:   r.Weight,
 			Port:     r.Port,
@@ -154,33 +153,26 @@ func parseRecordLine(line string, defaultTTL int, origin string, ownerInherited 
 	name := ""
 	ttl := defaultTTL
 
-	// A blank owner (leading whitespace) repeats the previous owner; only a line
-	// that genuinely starts at column 0 with a type/class/TTL means the apex.
 	inheritedName := "@"
 	if ownerInherited && lastOwner != "" {
 		inheritedName = lastOwner
 	}
 
-	// First field: name, or – only on a line that began with whitespace – the
-	// TTL, class or type of an inherited owner.
-	//
-	// The leading whitespace is the only thing that distinguishes the two: a
-	// record may legitimately be owned by a label that spells a type or a class
-	// ("ns", "alias", "mx", "srv" are all ordinary hostnames). Deciding by the
-	// token alone turned `alias IN CNAME host.example.com.` into an ALIAS record
-	// at the apex, and would do the same to the near-universal `ns IN A …`.
+	// The first field is the owner name, unless the line began with whitespace:
+	// then it may be a TTL, class or type. Labels such as "ns" or "mx" are
+	// valid owner names, so the token alone does not decide.
 	switch {
 	case !ownerInherited:
 		name = fields[idx]
 		idx++
 	case isRecordType(fields[idx]):
-		// No name, no TTL, no class – starts with type
+		// No name, TTL or class: starts with the type
 		name = inheritedName
 	case isClass(fields[idx]):
-		// No name – starts with class
+		// No name: starts with the class
 		name = inheritedName
 	case isTTL(fields[idx]):
-		// No name – starts with TTL
+		// No name: starts with the TTL
 		name = inheritedName
 		if t, err := parseTTLValue(fields[idx]); err == nil {
 			ttl = t
@@ -269,10 +261,8 @@ func parseRData(name string, ttl int, recordType string, rdata []string, origin 
 		record.Content = absoluteHostname(rdata[1], origin)
 
 	case "TXT":
-		// Keep the quoting as authored: a TXT rdata may hold several
-		// character-strings ("part one" "part two"), and collapsing them into one
-		// unquoted blob changes the record. The API passes an already-quoted value
-		// through untouched and quotes a bare one, so both forms survive.
+		// Keep TXT quoting as written: several character-strings ("a" "b") must
+		// stay separate.
 		txt := strings.Join(rdata, " ")
 		if !strings.HasPrefix(txt, `"`) || !strings.HasSuffix(txt, `"`) {
 			txt = strings.ReplaceAll(txt, `"`, "")
@@ -342,14 +332,8 @@ func normalizeName(name, origin string) string {
 	return name
 }
 
-// absoluteHostname resolves an rdata hostname to its fully-qualified form,
-// without the trailing dot (the API appends it).
-//
-// RDATA is never relative to the zone the way an owner name is: a bare label in
-// a zone file is relative to $ORIGIN and must be expanded, and a name that
-// already ends in a dot is absolute and must be kept whole. Shortening
-// "www.example.com." to "www" here used to store a root-level "www." target,
-// silently breaking every CNAME/MX/SRV that pointed inside the imported zone.
+// absoluteHostname returns an rdata hostname fully qualified, without the
+// trailing dot. A relative name is expanded with $ORIGIN.
 func absoluteHostname(hostname, origin string) string {
 	originClean := strings.TrimSuffix(origin, ".")
 
@@ -388,11 +372,8 @@ func isRecordType(s string) bool {
 	return types[strings.ToUpper(s)]
 }
 
-// isClass reports whether the token is a DNS class. Case-insensitive, like
-// isRecordType: class and type carry no case significance (RFC 1035 §2.3.1) and
-// generated exports do emit `in a 1.2.3.4`. While the comparison was literal
-// "IN", a lowercase class was not consumed as one, so it slid into the type slot
-// and the line parsed as type `IN` with the real type left in the rdata.
+// isClass reports whether the token is a DNS class. Like types, classes are
+// case-insensitive (RFC 1035 section 2.3.1).
 func isClass(s string) bool {
 	switch strings.ToUpper(s) {
 	case "IN", "CH", "HS":
@@ -449,7 +430,7 @@ func parseTTLValue(s string) (int, error) {
 		}
 	}
 	if current != "" {
-		// Trailing number without suffix – treat as seconds
+		// Trailing number without suffix: seconds
 		num, _ := strconv.Atoi(current)
 		total += num
 	}

@@ -6,9 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// buildCreateRecordRequest must leave TTL unset unless --ttl was given: a TTL is
-// a property of the whole rrset, so sending the flag's default alongside a new
-// value retimed every value already at that name.
+// TTL is left unset unless --ttl was given.
 func TestBuildCreateRecordRequestOmitsUnsetTTL(t *testing.T) {
 	cmd := &cobra.Command{}
 	addRecordFlags(cmd)
@@ -28,9 +26,7 @@ func TestBuildCreateRecordRequestOmitsUnsetTTL(t *testing.T) {
 	}
 }
 
-// An out-of-range TTL is sent as given so the API can refuse it. Dropping it
-// client-side reported success while creating the record with the default TTL,
-// telling the user the opposite of what happened.
+// An out-of-range TTL is sent as given, for the API to reject.
 func TestBuildCreateRecordRequestForwardsAnInvalidTTL(t *testing.T) {
 	cmd := &cobra.Command{}
 	addRecordFlags(cmd)

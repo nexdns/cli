@@ -184,13 +184,12 @@ The zone keeps serving throughout: the new group's nameservers are provisioned
 before the command returns, and removal from the old group is deferred so
 resolvers holding the old delegation are still answered while they refresh.
 
-Update the delegation at your registrar to the new nameservers – "nexdns zone
-info" prints them – and note that the platform limits how often one zone may be
-moved.
+Then update the delegation at your registrar to the new nameservers, which
+"nexdns zone info" prints. The platform limits how often one zone may be moved.
 
 Examples:
-  nexdns zone move example.com eu
-  nexdns zone move example.com ru --dry-run`,
+  nexdns zone move example.com <ns-group>
+  nexdns zone move example.com <ns-group> --dry-run`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := args[0]
@@ -203,9 +202,7 @@ Examples:
 
 		ctx := context.Background()
 
-		// Validated against the account's own catalog, the same check `zone add
-		// --ns-group` makes, so a typo is named here instead of coming back as a
-		// generic validation error.
+		// Validate the slug against the account's groups, as `zone add` does.
 		if err := assertNSGroupAvailable(ctx, client, slug); err != nil {
 			return err
 		}
@@ -332,10 +329,8 @@ func resolveNSGroupFlag(ctx context.Context, client *api.Client, cmd *cobra.Comm
 	return slug, nil
 }
 
-// assertNSGroupAvailable checks a slug against the groups this account may use,
-// naming the available ones when it does not match. The catalog is fetched rather
-// than hardcoded: which groups an account gets is a server-side decision, and the
-// set differs per instance.
+// assertNSGroupAvailable checks a slug against the groups available to the
+// account and lists them when it does not match.
 func assertNSGroupAvailable(ctx context.Context, client *api.Client, slug string) error {
 	groups, err := client.ListNSGroups(ctx)
 	if err != nil {
@@ -414,8 +409,7 @@ Examples:
 
 		replace, _ := cmd.Flags().GetBool("replace")
 
-		// Existing records are needed even without --replace: re-importing a file
-		// must skip what is already there instead of failing on every duplicate.
+		// Fetched even without --replace, so that a re-import skips existing records.
 		var existing []api.Record
 		if zoneID != "" {
 			existing, err = client.ListRecords(ctx, zoneID, api.ListRecordsOptions{})
@@ -426,8 +420,7 @@ Examples:
 
 		all := dns.ToCreateRequests(parsed)
 
-		// Apex NS is owned by the platform (the API rejects it), so importing a
-		// foreign nameserver set is reported as skipped rather than as an error.
+		// Apex NS records belong to the platform; report them as skipped.
 		var reqs []api.CreateRecordRequest
 		skippedNS := 0
 		for _, req := range all {
@@ -460,7 +453,7 @@ Examples:
 
 		reportSkippedNS := func() {
 			if skippedNS > 0 {
-				fmt.Fprintf(cmd.OutOrStdout(), "  ~ %d apex NS record(s) skipped – nameservers are managed by NexDNS\n", skippedNS)
+				fmt.Fprintf(cmd.OutOrStdout(), "  ~ %d apex NS record(s) skipped: nameservers are managed by NexDNS\n", skippedNS)
 			}
 		}
 
@@ -543,13 +536,9 @@ func findRecordsToDelete(existing []api.Record, imports []api.CreateRecordReques
 	return toDelete
 }
 
-// storedRecordKey and importRecordKey render a record the API already holds and
-// a record parsed from a zone file into the same comparable key.
-//
-// The API stores composed rdata ("10 mail.example.com.", `"v=spf1 -all"`,
-// `0 issue "letsencrypt.org"`) while the zone file carries the parts separately,
-// so comparing raw content marked every MX, TXT, SRV and CAA record as missing:
-// --replace then deleted records the file actually defined and re-added nothing.
+// storedRecordKey and importRecordKey build comparable keys for a stored
+// record and a zone-file record: the API stores composed rdata
+// ("10 mail.example.com."), while a zone file holds the parts separately.
 func storedRecordKey(r api.Record) string {
 	return recordKey(r.Type, r.Name, r.Content)
 }
@@ -610,11 +599,6 @@ var zoneCheckCmd = &cobra.Command{
 			return err
 		}
 
-		zone, err := client.GetZone(ctx, zoneID)
-		if err != nil {
-			return err
-		}
-
 		fmt.Fprintf(cmd.OutOrStdout(), "Checking %s against public resolvers...\n\n", domain)
 
 		resolvers := []string{"8.8.8.8", "1.1.1.1", "9.9.9.9", "208.67.222.222"}
@@ -667,14 +651,12 @@ var zoneCheckCmd = &cobra.Command{
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "\n")
-		_ = zone // zone used for context
 		if passed == total {
 			fmt.Fprintf(cmd.OutOrStdout(), "All checks passed (%d/%d)\n", passed, total)
 			return nil
 		}
 
-		// A failing propagation check must fail the command: this is the step a
-		// migration pipeline gates on, and exiting 0 made every gate pass.
+		// A failed check exits non-zero so a pipeline can gate on it.
 		fmt.Fprintf(cmd.OutOrStdout(), "Checks: %d/%d passed\n", passed, total)
 		return &silentError{fmt.Errorf("%d of %d propagation check(s) failed", total-passed, total)}
 	},

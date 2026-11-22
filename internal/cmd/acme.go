@@ -29,8 +29,8 @@ Use with certbot manual hooks:
     -d '*.example.com'
 
 Environment variables (set by certbot):
-  CERTBOT_DOMAIN      – the domain being validated
-  CERTBOT_VALIDATION  – the challenge token value`,
+  CERTBOT_DOMAIN      the domain being validated
+  CERTBOT_VALIDATION  the challenge token value`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		action, _ := cmd.Flags().GetString("action")
 		domain, _ := cmd.Flags().GetString("domain")
@@ -63,7 +63,6 @@ Environment variables (set by certbot):
 		ctx := context.Background()
 		challengeName := "_acme-challenge"
 
-		// Find zone by iterating subdomains
 		zoneID, subDomain, err := findZoneForDomain(ctx, client, domain)
 		if err != nil {
 			return err
@@ -112,8 +111,8 @@ Environment variables (set by certbot):
 	},
 }
 
-// findZoneForDomain resolves the zone ID and subdomain part for a domain.
-// Tries each parent domain: sub.example.com → example.com
+// findZoneForDomain resolves the zone ID and subdomain part for a domain,
+// trying each parent domain in turn: sub.example.com, then example.com.
 func findZoneForDomain(ctx context.Context, client *api.Client, domain string) (zoneID, subDomain string, err error) {
 	parts := strings.Split(domain, ".")
 	for i := range parts {

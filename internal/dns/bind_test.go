@@ -39,8 +39,7 @@ func TestParseMXRecord(t *testing.T) {
 	require.Len(t, records, 1)
 
 	assert.Equal(t, "MX", records[0].Type)
-	// RDATA stays fully qualified: shortening it to "mail" made the API store a
-	// root-level "mail." target.
+	// RDATA stays fully qualified.
 	assert.Equal(t, "mail.example.com", records[0].Content)
 	assert.NotNil(t, records[0].Priority)
 	assert.Equal(t, 10, *records[0].Priority)
@@ -67,8 +66,7 @@ func TestParseOutOfZoneRDataIsKept(t *testing.T) {
 }
 
 func TestOwnerNameInheritance(t *testing.T) {
-	// A blank owner repeats the previous one (RFC 1035 §5.1) – the shape every
-	// round-robin block in a real zone file uses.
+	// A blank owner repeats the previous one (RFC 1035 section 5.1).
 	zone := "www IN A 198.51.100.11\n\tIN A 198.51.100.12\n\tIN A 198.51.100.13\nmail IN A 198.51.100.20\n"
 	records, err := ParseBINDZone(strings.NewReader(zone), "example.com")
 	require.NoError(t, err)
@@ -242,8 +240,7 @@ func TestToCreateRequests(t *testing.T) {
 }
 
 func TestOwnerNameMayLookLikeARecordType(t *testing.T) {
-	// "ns", "alias" and friends are ordinary hostnames. Deciding by the token
-	// alone turned `alias IN CNAME …` into an ALIAS record at the apex.
+	// Labels that spell a type, such as "ns" or "alias", are owner names.
 	zone := `alias IN CNAME host.example.com.
 ns IN A 198.51.100.1
 mx 300 IN A 198.51.100.2`

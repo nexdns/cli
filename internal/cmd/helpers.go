@@ -35,9 +35,8 @@ func newAPIClient(cmd *cobra.Command) (*api.Client, error) {
 	return api.NewClient(cfg.APIUrl, cfg.Token, timeout, verbose), nil
 }
 
-// writeFormatted prints a plain value in the requested machine-readable format.
-// The Formatter interface is typed per resource; this covers the few commands
-// whose payload is not one of those resources (DS records, for instance).
+// writeFormatted prints a value that has no Formatter method, such as DS
+// records, in the requested machine-readable format.
 func writeFormatted(cmd *cobra.Command, format string, value map[string]interface{}) error {
 	switch format {
 	case "json":
@@ -121,24 +120,11 @@ func isDryRun(cmd *cobra.Command) bool {
 	return v
 }
 
-// zoneDisplayName is the name to echo back to a human: the native-script form of
-// an internationalized zone when the API returned one, otherwise the stored ACE
-// name. Mirrors what the table formatter shows, so a zone does not change its
-// spelling between the command that created it and the one that lists it.
+// zoneDisplayName returns the Unicode name of an IDN zone when the API sent
+// one, and the stored name otherwise.
 func zoneDisplayName(zone *api.ZoneListItem) string {
 	if zone.UnicodeName != "" {
 		return zone.UnicodeName
 	}
 	return zone.Name
-}
-
-// ttlPtr converts a TTL read from a zone file or a nexdns.yaml operation into the
-// request's optional field. A zero there means "the file did not say", which is
-// exactly the case where the API should keep the rrset's own TTL, so it maps to
-// no field rather than to a literal 0.
-func ttlPtr(ttl int) *int {
-	if ttl == 0 {
-		return nil
-	}
-	return &ttl
 }

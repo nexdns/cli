@@ -1,6 +1,4 @@
-// Command nexdns is the NexDNS command-line client for managing DNS zones and
-// records through the REST API. It is a thin entry point: the command tree and
-// all behaviour live in package internal/cmd.
+// Command nexdns is the NexDNS command-line client.
 package main
 
 import (

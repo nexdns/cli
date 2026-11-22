@@ -68,8 +68,7 @@ func TestCreateWebhookReturnsTheSecretOnce(t *testing.T) {
 	assert.Equal(t, "prod", body["description"])
 }
 
-// The update endpoint replaces rather than patches, so every field has to be on
-// the wire even when the caller only meant to change one.
+// The update replaces the webhook, so every field is sent.
 func TestUpdateWebhookSendsEveryField(t *testing.T) {
 	var body map[string]any
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {

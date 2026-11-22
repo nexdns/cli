@@ -13,35 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # GoReleaser builds the changelog from the commit range since the
-          # previous tag, so it needs the full history rather than a shallow one.
+          # The changelog is built from the commits since the previous tag.
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      # GoReleaser builds the images for two platforms in one buildx pass and
-      # pushes them, so the runner needs emulation, a buildx builder and a
-      # registry login before it starts. Without the login the run fails at the
-      # push, after the GitHub release and the Homebrew cask have already been
-      # published - a half-finished release is worse than none.
-      # A missing secret reaches docker/login-action as an empty password and
-      # surfaces as "Username and password required", which says nothing about
-      # which secret, in which repository, or under which tab it was expected.
+      # Check the secret before anything is published: without it the run would
+      # fail at the image push, after the release and the cask are already out.
       - name: Registry credentials are present
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           if [ -z "${DOCKERHUB_TOKEN}" ]; then
-            echo "::error::DOCKERHUB_TOKEN is empty or unset in this repository."
-            echo "It must be an Actions *repository* secret - Settings -> Secrets and"
-            echo "variables -> Actions -> Repository secrets. A secret added under the"
-            echo "Codespaces or Dependabot tab, or scoped to an environment this job"
-            echo "does not declare, is invisible here."
+            echo "::error::The DOCKERHUB_TOKEN repository secret is not set."
             exit 1
           fi
-          echo "DOCKERHUB_TOKEN is present (${#DOCKERHUB_TOKEN} characters)."
 
       - uses: docker/setup-qemu-action@v3
 
@@ -49,8 +37,6 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          # Not a secret: the account name is already part of every image
-          # name this workflow pushes.
           username: nexdns
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -60,7 +46,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The built-in token is scoped to this repository and cannot push the
-          # cask to nexdns/homebrew-tap; that needs its own token with write
-          # access there. See docs guide "GitHub Publishing".
+          # GITHUB_TOKEN cannot push the cask to nexdns/homebrew-tap.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

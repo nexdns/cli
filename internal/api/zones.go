@@ -69,9 +69,7 @@ func (c *Client) GetZoneByName(ctx context.Context, name string) (*ZoneListItem,
 		return nil, err
 	}
 
-	// An internationalized zone is stored in ACE form, so a user who types the
-	// native name (`тест.рф`) must still match: the API returns both forms and
-	// either one identifies the zone.
+	// Match either the ACE or the Unicode form of an IDN zone.
 	for i := range resp.Data {
 		if resp.Data[i].Name == name || resp.Data[i].UnicodeName == name {
 			return &resp.Data[i], nil
@@ -100,12 +98,8 @@ func (c *Client) DeleteZone(ctx context.Context, id string) error {
 	return c.do(ctx, "DELETE", "/zones/"+id, nil, nil)
 }
 
-// MoveZone moves a zone into another nameserver group, identified by slug, and
-// returns the zone as it stands afterwards.
-//
-// The move is asynchronous on the platform side: the new group's nameservers are
-// provisioned before the response, while removal from the old group's servers is
-// deferred so resolvers that still hold the old delegation keep getting answers.
+// MoveZone moves a zone into another nameserver group, identified by slug,
+// and returns the updated zone.
 func (c *Client) MoveZone(ctx context.Context, id, nsGroupSlug string) (*Zone, error) {
 	var zone Zone
 	err := c.do(ctx, "PATCH", "/zones/"+id, MoveZoneRequest{NSGroup: nsGroupSlug}, &zone)
@@ -125,13 +119,7 @@ func (c *Client) ListNSGroups(ctx context.Context) ([]NSGroup, error) {
 	return groups, nil
 }
 
-// ExportZone exports a zone in the specified format ("bind" or "json").
-//
-// The two formats do not share a response shape: a BIND export is a single
-// string, a JSON export is an object holding the zone name and its records.
-// Decoding both as a string made `--format json` fail outright, so the payload
-// is taken raw and only unwrapped when it really is a string; anything else is
-// returned re-indented, which is what a caller piping JSON wants to see.
+// ExportZone exports a zone as "bind" (zone file text) or "json".
 func (c *Client) ExportZone(ctx context.Context, id, format string) (string, error) {
 	params := map[string]string{}
 	if format != "" {

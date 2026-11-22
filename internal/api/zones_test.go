@@ -18,7 +18,7 @@ func TestListZones(t *testing.T) {
 		assert.Equal(t, "GET", r.Method)
 		assert.Equal(t, "/zones", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"success","data":[{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":"Russia","records_count":12,"created_at":"2025-01-15"}],"meta":{"total":1,"page":1,"per_page":25,"last_page":1}}`))
+		w.Write([]byte(`{"status":"success","data":[{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":"Group A","records_count":12,"created_at":"2025-01-15"}],"meta":{"total":1,"page":1,"per_page":25,"last_page":1}}`))
 	})
 
 	resp, err := client.ListZones(context.Background(), ListZonesOptions{})
@@ -33,7 +33,7 @@ func TestGetZoneByNameExactMatch(t *testing.T) {
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Search returns partial matches too
-		w.Write([]byte(`{"status":"success","data":[{"id":"aaa","name":"sub.example.com","type":"master","status":"active","ns_group":"Russia"},{"id":"bbb","name":"example.com","type":"master","status":"active","ns_group":"Russia"}],"meta":{"total":2,"page":1,"per_page":100,"last_page":1}}`))
+		w.Write([]byte(`{"status":"success","data":[{"id":"aaa","name":"sub.example.com","type":"master","status":"active","ns_group":"Group A"},{"id":"bbb","name":"example.com","type":"master","status":"active","ns_group":"Group A"}],"meta":{"total":2,"page":1,"per_page":100,"last_page":1}}`))
 	})
 
 	zone, err := client.GetZoneByName(context.Background(), "example.com")
@@ -62,7 +62,7 @@ func TestCreateZone(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(201)
-		w.Write([]byte(`{"status":"success","data":{"id":"newzone","name":"example.com","type":"master","status":"active","ns_group":"Russia"}}`))
+		w.Write([]byte(`{"status":"success","data":{"id":"newzone","name":"example.com","type":"master","status":"active","ns_group":"Group A"}}`))
 	})
 
 	zone, err := client.CreateZone(context.Background(), CreateZoneRequest{Name: "example.com"})
@@ -114,19 +114,17 @@ func TestMoveZoneSendsTheSlug(t *testing.T) {
 		raw, _ := io.ReadAll(r.Body)
 		require.NoError(t, json.Unmarshal(raw, &body))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"success","data":{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":{"id":"eu","slug":"eu","name":"Europe"},"records_count":12,"created_at":"2026-01-15","updated_at":"2026-07-30"}}`))
+		w.Write([]byte(`{"status":"success","data":{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":{"id":"group-b","slug":"group-b","name":"Group B"},"records_count":12,"created_at":"2026-01-15","updated_at":"2026-07-30"}}`))
 	})
 
-	zone, err := client.MoveZone(context.Background(), "xK9mQ2", "eu")
+	zone, err := client.MoveZone(context.Background(), "xK9mQ2", "group-b")
 	require.NoError(t, err)
 	require.NotNil(t, zone.NSGroup)
-	assert.Equal(t, "eu", zone.NSGroup.Slug)
-	assert.Equal(t, "eu", body["ns_group"])
+	assert.Equal(t, "group-b", zone.NSGroup.Slug)
+	assert.Equal(t, "group-b", body["ns_group"])
 }
 
-// A 429 is checked before the request is executed, so replaying a rejected write
-// cannot double-apply it - the retry covers writes too, which is what lets a
-// large import outrun a per-minute budget instead of losing records.
+// A 429 is rejected before the request runs, so writes are retried too.
 func TestMoveZoneRetriesARateLimitAndSucceeds(t *testing.T) {
 	calls := 0
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -138,17 +136,16 @@ func TestMoveZoneRetriesARateLimitAndSucceeds(t *testing.T) {
 			w.Write([]byte(`{"status":"error","error":{"code":"rate_limit_exceeded","message":"Too many requests."}}`))
 			return
 		}
-		w.Write([]byte(`{"status":"success","data":{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":{"id":"eu","slug":"eu","name":"Europe"},"records_count":12,"created_at":"2026-01-15","updated_at":"2026-07-30"}}`))
+		w.Write([]byte(`{"status":"success","data":{"id":"xK9mQ2","name":"example.com","type":"master","status":"active","ns_group":{"id":"group-b","slug":"group-b","name":"Group B"},"records_count":12,"created_at":"2026-01-15","updated_at":"2026-07-30"}}`))
 	})
 
-	zone, err := client.MoveZone(context.Background(), "xK9mQ2", "eu")
+	zone, err := client.MoveZone(context.Background(), "xK9mQ2", "group-b")
 	require.NoError(t, err)
 	require.NotNil(t, zone.NSGroup)
 	assert.Equal(t, 2, calls, "the rejected attempt must be replayed once")
 }
 
-// A 5xx on a write is a different story: the request may have been executed, so
-// it is never replayed.
+// A write that got a 5xx may have been applied, so it is not retried.
 func TestMoveZoneDoesNotRetryAServerError(t *testing.T) {
 	calls := 0
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +155,7 @@ func TestMoveZoneDoesNotRetryAServerError(t *testing.T) {
 		w.Write([]byte(`{"status":"error","error":{"code":"server_error","message":"An internal error occurred"}}`))
 	})
 
-	_, err := client.MoveZone(context.Background(), "xK9mQ2", "eu")
+	_, err := client.MoveZone(context.Background(), "xK9mQ2", "group-b")
 	require.Error(t, err)
 	assert.Equal(t, 1, calls, "a PATCH must not be replayed after a server error")
 }
@@ -174,14 +171,13 @@ func TestRateLimitRetryEventuallySurfaces(t *testing.T) {
 		w.Write([]byte(`{"status":"error","error":{"code":"rate_limit_exceeded","message":"Too many requests."}}`))
 	})
 
-	_, err := client.MoveZone(context.Background(), "xK9mQ2", "eu")
+	_, err := client.MoveZone(context.Background(), "xK9mQ2", "group-b")
 	require.Error(t, err)
 	assert.True(t, IsRateLimited(err))
 	assert.Equal(t, maxRetries, calls)
 }
 
-// A per-day limit (an NS-group move is 3 a day per zone) must be reported at
-// once: waiting out that window is not a retry, it is a hang.
+// A per-day limit is reported at once instead of waited out.
 func TestRateLimitWithAFarOffResetIsNotRetried(t *testing.T) {
 	calls := 0
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +188,7 @@ func TestRateLimitWithAFarOffResetIsNotRetried(t *testing.T) {
 		w.Write([]byte(`{"status":"error","error":{"code":"rate_limit_exceeded","message":"Too many NS group changes for this zone."}}`))
 	})
 
-	_, err := client.MoveZone(context.Background(), "xK9mQ2", "eu")
+	_, err := client.MoveZone(context.Background(), "xK9mQ2", "group-b")
 	require.Error(t, err)
 	assert.True(t, IsRateLimited(err))
 	assert.Equal(t, 1, calls, "a window a day out must not be slept through")

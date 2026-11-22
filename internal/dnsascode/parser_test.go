@@ -15,7 +15,7 @@ func TestParseConfigFile(t *testing.T) {
 
 	content := `zones:
   example.com:
-    ns_group: ru
+    ns_group: group-b
     dnssec: true
     records:
       - type: A
@@ -37,7 +37,7 @@ func TestParseConfigFile(t *testing.T) {
 	assert.Len(t, cfg.Zones, 1)
 
 	zone := cfg.Zones["example.com"]
-	assert.Equal(t, "ru", zone.NSGroup)
+	assert.Equal(t, "group-b", zone.NSGroup)
 	assert.True(t, zone.DNSSEC)
 	assert.Len(t, zone.Records, 3)
 	assert.Equal(t, "A", zone.Records[0].Type)

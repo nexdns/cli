@@ -14,7 +14,7 @@ import (
 
 func sampleZones() []api.ZoneListItem {
 	return []api.ZoneListItem{
-		{ID: "abc", Name: "example.com", Type: "master", Status: "active", NSGroup: "Russia", RecordsCount: 12, CreatedAt: "2025-01-15"},
+		{ID: "abc", Name: "example.com", Type: "master", Status: "active", NSGroup: "Group A", RecordsCount: 12, CreatedAt: "2025-01-15"},
 		{ID: "def", Name: "test.org", Type: "master", Status: "active", NSGroup: "Europe", RecordsCount: 5, CreatedAt: "2025-02-01"},
 	}
 }

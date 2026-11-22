@@ -4,6 +4,7 @@ dist/
 *.test
 *.out
 coverage.txt
+coverage.xml
 .idea/
 .vscode/
 __pycache__/

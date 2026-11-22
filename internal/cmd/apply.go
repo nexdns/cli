@@ -70,9 +70,7 @@ func runApply(cmd *cobra.Command, _ bool) error {
 	}
 	sort.Strings(zoneNames)
 
-	// A --zone that names nothing in the file used to filter every zone out and
-	// report "No changes needed" with exit 0, so a typo in a pipeline looked like
-	// a converged apply.
+	// Fail on a --zone that the file does not define.
 	if zoneFilter != "" {
 		if _, ok := cfg.Zones[zoneFilter]; !ok {
 			return fmt.Errorf("zone %q is not defined in %s (defined: %s)", zoneFilter, filePath, strings.Join(zoneNames, ", "))
@@ -164,9 +162,9 @@ func runApply(cmd *cobra.Command, _ bool) error {
 
 				case "update":
 					symbol := "~"
-					detail := fmt.Sprintf("%s %s – content: %s → %s", op.Type, op.Name, op.OldContent, op.Content)
+					detail := fmt.Sprintf("%s %s: content %s -> %s", op.Type, op.Name, op.OldContent, op.Content)
 					if op.OldTTL != op.TTL {
-						detail += fmt.Sprintf(", TTL: %d → %d", op.OldTTL, op.TTL)
+						detail += fmt.Sprintf(", TTL %d -> %d", op.OldTTL, op.TTL)
 					}
 					if confirm {
 						req := api.UpdateRecordRequest{
@@ -210,8 +208,6 @@ func runApply(cmd *cobra.Command, _ bool) error {
 	if confirm {
 		applied := totalOps - failedOps
 		if failedOps > 0 {
-			// Reporting success while operations failed let a broken apply pass a
-			// CI gate unnoticed.
 			fmt.Fprintf(cmd.OutOrStdout(), "%d of %d operation(s) applied, %d failed\n", applied, totalOps, failedOps)
 			return fmt.Errorf("%d operation(s) failed", failedOps)
 		}
@@ -228,20 +224,16 @@ func runApply(cmd *cobra.Command, _ bool) error {
 	return nil
 }
 
-// buildApplyCreateRequest turns a planned operation into an API create request.
-//
-// The API takes the type-specific parts as separate fields, but nexdns.yaml may
-// carry them either way: a hand-written file sets `priority` / `tag` / `flags`
-// next to a bare content value, while a file produced by `nexdns pull` holds the
-// composed rdata ("10 mail.example.com.", `0 issue "letsencrypt.org"`). Posting
-// the composed form as `content` made the API reject it, so a CAA row in a
-// hand-written config could never be applied. Both shapes are accepted here.
+// buildApplyCreateRequest turns a planned operation into a create request.
+// Content may hold composed rdata as written by `nexdns pull`
+// ("10 mail.example.com.") or only the value, with the parts in separate
+// fields. Both are accepted.
 func buildApplyCreateRequest(op dnsascode.Operation) api.CreateRecordRequest {
 	req := api.CreateRecordRequest{
 		Name:     op.Name,
 		Type:     op.Type,
 		Content:  op.Content,
-		TTL:      ttlPtr(op.TTL),
+		TTL:      api.OptionalTTL(op.TTL),
 		Priority: op.Priority,
 		Weight:   op.Weight,
 		Port:     op.Port,

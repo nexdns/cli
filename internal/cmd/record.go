@@ -201,7 +201,7 @@ var recordEnsureCmd = &cobra.Command{
 	Long: `Idempotent record creation. Checks if an exact match (type + name + content) exists.
 If found, skips. If not found, creates.
 
-Safe for round-robin setups – will not touch existing records with different content.`,
+Safe for round-robin sets: existing records with different content are left alone.`,
 	Args: cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := args[0]
@@ -255,13 +255,8 @@ func buildCreateRecordRequest(cmd *cobra.Command, recordType, name, content stri
 		Content: content,
 	}
 
-	// Only an explicit --ttl is sent, and then verbatim. A TTL belongs to the
-	// rrset, so submitting the flag's default alongside a new value silently
-	// retimed every value already at that name; omitting it lets the API keep the
-	// rrset's own TTL. Dropping an out-of-range value instead of sending it was
-	// just as bad in the other direction - `--ttl -5` reported success and
-	// created the record with the default, so the user was told the opposite of
-	// what happened. The API owns the range check.
+	// Send --ttl only when it was given, and as given: the TTL belongs to the
+	// whole rrset, and the API checks the range.
 	if cmd.Flags().Changed("ttl") {
 		ttl, _ := cmd.Flags().GetInt("ttl")
 		req.TTL = &ttl

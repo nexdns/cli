@@ -2,9 +2,7 @@ package version
 
 import "testing"
 
-// A release links the metadata in, and the build-info fallback must not
-// overwrite it: the linked values name the released tag, while build info for
-// the same binary can name the commit it was built from.
+// Values linked in with -ldflags are not replaced by build info.
 func TestLinkedValuesSurviveTheFallback(t *testing.T) {
 	origVersion, origCommit, origDate := Version, Commit, Date
 	t.Cleanup(func() { Version, Commit, Date = origVersion, origCommit, origDate })
@@ -17,8 +15,7 @@ func TestLinkedValuesSurviveTheFallback(t *testing.T) {
 	}
 }
 
-// `go install pkg@version` runs no link flags, so a binary installed that way
-// reported "dev" until it learned to read what Go stamps in by itself.
+// `go install pkg@version` sets no -ldflags; the version comes from build info.
 func TestPlaceholdersAreReplacedWhenBuildInfoHasMore(t *testing.T) {
 	origVersion, origCommit, origDate := Version, Commit, Date
 	t.Cleanup(func() { Version, Commit, Date = origVersion, origCommit, origDate })
@@ -26,8 +23,8 @@ func TestPlaceholdersAreReplacedWhenBuildInfoHasMore(t *testing.T) {
 	Version, Commit, Date = "dev", "unknown", "unknown"
 	fillFromBuildInfo()
 
-	// Under `go test` the main module is the test binary's, so a version is not
-	// guaranteed; what must hold is that nothing was made worse.
+	// Under `go test` the module version is not guaranteed; only check that no
+	// field was cleared.
 	if Version == "" || Commit == "" || Date == "" {
 		t.Error("fallback cleared a field instead of leaving the placeholder")
 	}

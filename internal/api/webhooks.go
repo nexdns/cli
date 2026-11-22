@@ -23,10 +23,8 @@ func (c *Client) GetWebhook(ctx context.Context, id string) (*Webhook, error) {
 	return &webhook, nil
 }
 
-// CreateWebhook registers a webhook and returns its id together with the signing
-// secret. The secret exists in this response only: it is never returned again, so
-// a caller that does not keep it has to replace the webhook to get a new one.
-// Requires the `webhooks.write` scope.
+// CreateWebhook registers a webhook and returns its id and signing secret.
+// The secret is not returned again. Requires the `webhooks.write` scope.
 func (c *Client) CreateWebhook(ctx context.Context, req CreateWebhookRequest) (*CreatedWebhook, error) {
 	var created CreatedWebhook
 	err := c.do(ctx, "POST", "/webhooks", req, &created)
@@ -52,9 +50,8 @@ func (c *Client) DeleteWebhook(ctx context.Context, id string) error {
 	return c.do(ctx, "DELETE", "/webhooks/"+id, nil, nil)
 }
 
-// TestWebhook queues a test event for the webhook. The call returns as soon as the
-// event is queued, so a 200 means "accepted for delivery", not "delivered" - read
-// the outcome back with GetWebhook. Requires the `webhooks.write` scope.
+// TestWebhook queues a test event for the webhook; GetWebhook shows the
+// delivery result. Requires the `webhooks.write` scope.
 func (c *Client) TestWebhook(ctx context.Context, id string) (string, error) {
 	var result struct {
 		Message string `json:"message"`

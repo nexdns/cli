@@ -160,8 +160,7 @@ func TestClientRetriesOn500(t *testing.T) {
 }
 
 func TestClientDoesNotRetryWritesOn500(t *testing.T) {
-	// Non-idempotent writes must not be retried: a retry could double-submit and
-	// surface a spurious 409/404 if the first attempt was actually applied.
+	// Writes are not retried on a 5xx: the first attempt may have been applied.
 	for _, method := range []string{"POST", "DELETE"} {
 		t.Run(method, func(t *testing.T) {
 			var attempts atomic.Int32
@@ -182,7 +181,7 @@ func TestClientDoesNotRetryWritesOn500(t *testing.T) {
 func TestClientParsesMetadata(t *testing.T) {
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"success","data":[{"id":"abc","name":"example.com","type":"master","status":"active","ns_group":"Russia","records_count":5}],"meta":{"total":1,"page":1,"per_page":25,"last_page":1}}`))
+		w.Write([]byte(`{"status":"success","data":[{"id":"abc","name":"example.com","type":"master","status":"active","ns_group":"Group A","records_count":5}],"meta":{"total":1,"page":1,"per_page":25,"last_page":1}}`))
 	})
 
 	var data []ZoneListItem
@@ -196,9 +195,7 @@ func TestClientParsesMetadata(t *testing.T) {
 	assert.Equal(t, 1, meta.LastPage)
 }
 
-// A response that reports the budget spent must park the next request until the
-// window rolls over, rather than spending a retry attempt on a certain 429. This
-// is what keeps a bulk import from losing records once it outruns the plan.
+// An exhausted budget delays the next request until the window resets.
 func TestClientWaitsForTheRateLimitWindow(t *testing.T) {
 	var starts []time.Time
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -234,8 +231,7 @@ func TestRateLimitWaitIsCapped(t *testing.T) {
 	assert.Greater(t, parseRateLimitReset(strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10)), maxRateLimitWait)
 }
 
-// The rate-limit error must keep the server's reason - which limit was hit - and
-// add a readable wait, not replace the sentence with an epoch timestamp.
+// The error keeps the server's message and adds a readable wait.
 func TestRateLimitErrorKeepsTheServerReason(t *testing.T) {
 	_, client := testServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -244,7 +240,7 @@ func TestRateLimitErrorKeepsTheServerReason(t *testing.T) {
 		w.Write([]byte(`{"status":"error","error":{"code":"rate_limit_exceeded","message":"Too many NS group changes for this zone."}}`))
 	})
 
-	err := client.do(context.Background(), "PATCH", "/zones/x", map[string]string{"ns_group": "eu"}, nil)
+	err := client.do(context.Background(), "PATCH", "/zones/x", map[string]string{"ns_group": "group-b"}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Too many NS group changes for this zone.")
 	assert.Contains(t, err.Error(), "Try again in 4m.")

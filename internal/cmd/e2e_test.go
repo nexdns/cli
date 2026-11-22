@@ -44,8 +44,6 @@ func runCLI(t *testing.T, args ...string) (stdout, stderr string, exitCode int) 
 	return outBuf.String(), errBuf.String(), exitCode
 }
 
-// --- Version ---
-
 func TestE2E_Version(t *testing.T) {
 	stdout, _, code := runCLI(t, "version")
 	if code != 0 {
@@ -65,8 +63,6 @@ func TestE2E_VersionFlag(t *testing.T) {
 		t.Error("expected version output, got empty")
 	}
 }
-
-// --- Exit codes ---
 
 func TestE2E_UnknownCommand_Exit2(t *testing.T) {
 	_, _, code := runCLI(t, "nonexistent")
@@ -89,8 +85,7 @@ func TestE2E_UnknownFlag_Exit2(t *testing.T) {
 	}
 }
 
-// A typo'd subcommand of a group used to print the group's help and exit 0,
-// so a script could not tell it from a completed operation.
+// An unknown subcommand of a group is a usage error (exit 2).
 func TestE2E_UnknownSubcommand_Exit2(t *testing.T) {
 	for _, group := range []string{"zone", "record", "dnssec", "account", "config", "webhook"} {
 		_, _, code := runCLI(t, group, "frobnicate")
@@ -100,7 +95,7 @@ func TestE2E_UnknownSubcommand_Exit2(t *testing.T) {
 	}
 }
 
-// A group invoked with no subcommand at all is still just a request for help.
+// A group with no subcommand prints its help.
 func TestE2E_GroupWithoutSubcommand_Exit0(t *testing.T) {
 	stdout, _, code := runCLI(t, "zone")
 	if code != 0 {
@@ -110,8 +105,6 @@ func TestE2E_GroupWithoutSubcommand_Exit0(t *testing.T) {
 		t.Errorf("expected the group help on stdout, got %q", stdout)
 	}
 }
-
-// --- Auth errors ---
 
 func TestE2E_NoToken_Exit1(t *testing.T) {
 	_, stderr, code := runCLI(t, "zone", "list", "--config", "/tmp/nexdns-nonexistent-config.yaml")
@@ -142,8 +135,6 @@ func TestE2E_TokenTooShort(t *testing.T) {
 		t.Errorf("expected 'too short' error, got: %s", stderr)
 	}
 }
-
-// --- Help ---
 
 func TestE2E_Help(t *testing.T) {
 	stdout, _, code := runCLI(t, "--help")
@@ -181,8 +172,6 @@ func TestE2E_RecordHelp(t *testing.T) {
 	}
 }
 
-// --- Completion ---
-
 func TestE2E_CompletionBash(t *testing.T) {
 	stdout, _, code := runCLI(t, "completion", "bash")
 	if code != 0 {
@@ -203,8 +192,6 @@ func TestE2E_CompletionZsh(t *testing.T) {
 	}
 }
 
-// --- Dry-run ---
-
 func TestE2E_RecordAddDryRun(t *testing.T) {
 	stdout, _, code := runCLI(t, "record", "add", "example.com", "A", "www", "1.2.3.4", "--dry-run", "--config", "/tmp/nexdns-nonexistent.yaml")
 	if code != 0 {
@@ -214,8 +201,6 @@ func TestE2E_RecordAddDryRun(t *testing.T) {
 		t.Errorf("expected dry-run message, got: %s", stdout)
 	}
 }
-
-// --- Auth save/load cycle ---
 
 func TestE2E_AuthLogoutNonexistentConfig(t *testing.T) {
 	dir := t.TempDir()
@@ -230,10 +215,7 @@ func TestE2E_AuthLogoutNonexistentConfig(t *testing.T) {
 	}
 }
 
-// --- Webhooks and the NS-group move ---
-
-// --events is required, and the check happens before any network call, so the
-// error is the same with no config at all.
+// --events is checked before any network call.
 func TestE2E_WebhookCreateRequiresEvents(t *testing.T) {
 	_, stderr, code := runCLI(t, "webhook", "create", "https://example.com/hook", "--config", "/tmp/nexdns-nonexistent.yaml")
 	if code != 1 {
@@ -254,8 +236,7 @@ func TestE2E_WebhookCreateDryRun(t *testing.T) {
 	}
 }
 
-// An update that names no field is a usage mistake, caught before the fetch the
-// replace-semantics workaround would otherwise perform.
+// An update with nothing to change fails before any network call.
 func TestE2E_WebhookUpdateWithoutFieldsFails(t *testing.T) {
 	_, stderr, code := runCLI(t, "webhook", "update", "xK9mPq2R", "--config", "/tmp/nexdns-nonexistent.yaml")
 	if code != 1 {

@@ -21,11 +21,8 @@ const (
 	maxRetries = 3
 	baseDelay  = 1 * time.Second
 	maxJitter  = 500 * time.Millisecond
-	// maxRateLimitWait is the longest a command will sit waiting for a rate-limit
-	// window to roll over. Beyond it the limit is reported instead: a per-minute
-	// request budget is worth waiting out, while some limits reset only after a
-	// day, and a command that hangs for hours is worse than one that says which
-	// limit it hit.
+	// maxRateLimitWait is the longest a command waits for a rate-limit window
+	// to reset. A longer wait is reported as an error instead.
 	maxRateLimitWait = 90 * time.Second
 )
 
@@ -37,10 +34,8 @@ type Client struct {
 	Verbose    bool
 	UserAgent  string
 
-	// budget tracks the rate-limit headers of the last response so the next
-	// request can wait for the window to roll over instead of spending an attempt
-	// on a 429. Bulk work - a zone import over a few hundred rrsets - otherwise
-	// outruns the plan's per-minute budget and starts losing individual records.
+	// budget holds the rate-limit headers of the last response, so the next
+	// request can wait for the window to reset instead of getting a 429.
 	budgetMu        sync.Mutex
 	budgetRemaining int
 	budgetReset     time.Time
@@ -85,10 +80,8 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 
 	url := c.BaseURL + path
 
-	// Only GET is safe to retry automatically. POST is not idempotent; PUT/DELETE can
-	// surface spurious 409/404 on a slow backend because the first attempt may have already
-	// been applied (and record IDs are content-derived, so they change on update). Retrying
-	// a write that timed out would double-submit and report "already exists" / "not found".
+	// Only GET is retried on a network error or a 5xx: a write that failed may
+	// already have been applied.
 	retryable := method == http.MethodGet
 
 	c.waitForBudget()
@@ -137,7 +130,6 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 
 		if c.Verbose {
 			fmt.Printf("← %d %s (%s)\n", resp.StatusCode, resp.Status, duration.Round(time.Millisecond))
-			// Log rate limit headers
 			if rl := resp.Header.Get("X-RateLimit-Remaining"); rl != "" {
 				fmt.Printf("  Rate limit: %s/%s remaining (reset: %s)\n",
 					rl,
@@ -152,12 +144,11 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 			return fmt.Errorf("reading response: %w", err)
 		}
 
-		// 204 No Content
 		if resp.StatusCode == http.StatusNoContent {
 			return nil
 		}
 
-		// 5xx – retry (idempotent reads only)
+		// 5xx: retry idempotent reads only
 		if retryable && resp.StatusCode >= 500 && attempt < maxRetries-1 {
 			lastErr = parseErrorResponse(resp.StatusCode, respBody)
 			if c.Verbose {
@@ -172,11 +163,8 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 			continue
 		}
 
-		// 429 - rate limited. Retried for every method, unlike a 5xx: the budget
-		// is checked before the request is executed, so a rejected write had no
-		// effect and replaying it cannot double-apply anything. A bulk operation
-		// that outruns the per-minute budget therefore waits rather than losing
-		// the operations the budget rejected.
+		// 429: retry any method. The budget is checked before the request runs,
+		// so a rejected write had no effect.
 		if resp.StatusCode == http.StatusTooManyRequests {
 			apiErr := parseErrorResponse(resp.StatusCode, respBody)
 			wait := parseRetryAfter(resp.Header.Get("Retry-After"))
@@ -184,11 +172,7 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 				wait = parseRateLimitReset(resp.Header.Get("X-RateLimit-Reset"))
 			}
 
-			// Keep the server's reason and add how long the window has left. The
-			// message used to be replaced with "Rate limited. Reset at 1785370484",
-			// which threw away the one sentence that said *which* limit was hit
-			// ("Too many NS group changes for this zone.") in favour of an epoch
-			// timestamp no one can read.
+			// Keep the server's message, which names the limit, and add the wait.
 			if wait > 0 {
 				apiErr.Message = strings.TrimSpace(apiErr.Message)
 				if apiErr.Message == "" {
@@ -197,7 +181,6 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 				apiErr.Message = fmt.Sprintf("%s Try again in %s.", apiErr.Message, formatWait(wait))
 			}
 
-			// A window too far out to wait for is reported, not slept through.
 			if wait <= maxRateLimitWait && attempt < maxRetries-1 {
 				lastErr = apiErr
 				if c.Verbose {
@@ -214,12 +197,10 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 			return apiErr
 		}
 
-		// 4xx/5xx errors
 		if resp.StatusCode >= 400 {
 			return parseErrorResponse(resp.StatusCode, respBody)
 		}
 
-		// Parse success response
 		if result == nil {
 			return nil
 		}
@@ -242,8 +223,7 @@ func (c *Client) doWithMeta(ctx context.Context, method, path string, body inter
 
 		// Fallback: parse body directly (e.g., for export endpoint)
 		if err := json.Unmarshal(respBody, result); err != nil {
-			// A body that is not JSON at all (a plain-text zone export) is
-			// handed over verbatim to a caller that can hold it as-is.
+			// Plain text, such as a BIND zone export.
 			if s, ok := result.(*string); ok {
 				*s = string(respBody)
 				return nil
@@ -307,11 +287,8 @@ func (c *Client) recordBudget(h http.Header) {
 	c.budgetKnown = true
 }
 
-// waitForBudget sleeps until the rate-limit window rolls over when the previous
-// response reported the budget exhausted. This is the difference between a bulk
-// operation taking a little longer and a bulk operation losing records: a 429 is
-// retried, but only a few times, so a long enough overrun still ran out of
-// attempts.
+// waitForBudget sleeps until the rate-limit window resets when the previous
+// response reported the budget exhausted.
 func (c *Client) waitForBudget() {
 	c.budgetMu.Lock()
 	known, remaining, reset := c.budgetKnown, c.budgetRemaining, c.budgetReset
@@ -323,19 +300,17 @@ func (c *Client) waitForBudget() {
 
 	wait := time.Until(reset)
 	if wait <= 0 || wait > maxRateLimitWait {
-		// Nothing to wait for, or a window so far out that the request should go
-		// and come back with the limit rather than the command hanging.
+		// Nothing to wait for, or too long to wait: the server reports the limit.
 		return
 	}
 
 	if c.Verbose {
-		fmt.Printf("  … rate-limit budget spent, waiting %s for the window to reset\n", wait.Round(time.Second))
+		fmt.Printf("  rate-limit budget spent, waiting %s for the window to reset\n", wait.Round(time.Second))
 	}
 	time.Sleep(wait)
 }
 
-// formatWait renders a retry delay the way a person reads it: seconds for a
-// per-minute budget, minutes or hours for the longer per-operation limits.
+// formatWait renders a wait in seconds, minutes or hours.
 func formatWait(d time.Duration) string {
 	switch {
 	case d < time.Minute:
@@ -347,11 +322,8 @@ func formatWait(d time.Duration) string {
 	}
 }
 
-// parseRateLimitReset turns an X-RateLimit-Reset unix timestamp into how long is
-// left of the window. Used when the server sends no Retry-After. The value is
-// returned as-is - the caller decides whether it is short enough to wait for,
-// because that answer differs between a per-minute request budget and a per-day
-// operation limit.
+// parseRateLimitReset converts an X-RateLimit-Reset unix timestamp into the
+// time left in the window. It is used when there is no Retry-After header.
 func parseRateLimitReset(value string) time.Duration {
 	if value == "" {
 		return 0

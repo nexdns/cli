@@ -17,10 +17,7 @@ var configCmd = &cobra.Command{
 	Long:  "Read and write settings in the config file (default: ~/.nexdns/config.yaml).",
 }
 
-// configKeys is what `config set` / `config get` accept: every field the config
-// file itself holds. It used to be only api-url and token, while `config view`
-// listed output, color and timeout as well - so the three settings a user would
-// most want to make permanent could be changed only by hand-editing the YAML.
+// configKeys lists the keys `config set` and `config get` accept.
 const configKeys = "api-url, token, output, color, timeout"
 
 var configSetCmd = &cobra.Command{

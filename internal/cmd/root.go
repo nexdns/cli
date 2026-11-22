@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "nexdns",
-	Short:         "NexDNS CLI – manage DNS zones and records",
+	Short:         "NexDNS CLI: manage DNS zones and records",
 	Long:          "Command-line tool for managing DNS zones and records via the NexDNS API.",
 	Version:       version.Version,
 	SilenceUsage:  true,
@@ -49,10 +49,8 @@ func init() {
 // ExitCode holds the exit code to use. Set to 2 for usage errors.
 var ExitCode = 1
 
-// Execute runs the root command and returns its error (if any). It sets
-// ExitCode to 2 for Cobra usage errors (unknown command/flag, wrong arg count)
-// so the caller can distinguish them from runtime failures, which keep the
-// default exit code 1.
+// Execute runs the root command. It sets ExitCode to 2 for usage errors
+// (unknown command or flag, wrong number of arguments).
 func Execute() error {
 	rejectUnknownSubcommands(rootCmd)
 
@@ -66,12 +64,9 @@ func Execute() error {
 	return err
 }
 
-// rejectUnknownSubcommands makes a group command (one that only holds
-// subcommands, such as `zone` or `record`) fail on a name it does not know.
-// Cobra's default for such a command is to print its help and succeed, so
-// `nexdns zone frobincate` exited 0 and a script could not tell a typo from a
-// completed operation - while the same typo at the top level exited 2. Called
-// from Execute, after every package init has registered its commands.
+// rejectUnknownSubcommands makes a group command such as `zone` fail on an
+// unknown subcommand instead of printing its help and exiting 0. It runs from
+// Execute, once every init has registered its commands.
 func rejectUnknownSubcommands(cmd *cobra.Command) {
 	for _, sub := range cmd.Commands() {
 		rejectUnknownSubcommands(sub)
@@ -89,10 +84,8 @@ func rejectUnknownSubcommands(cmd *cobra.Command) {
 	}
 }
 
-// IsSilent reports whether an error from Execute has already been reported to
-// the user by the command itself (a propagation check that printed its own
-// per-resolver table, for example). The caller should exit non-zero without
-// printing anything further.
+// IsSilent reports whether the command already printed its own report for
+// the error, so the caller exits non-zero without printing anything more.
 func IsSilent(err error) bool {
 	var silent *silentError
 	return errors.As(err, &silent)

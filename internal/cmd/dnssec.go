@@ -146,8 +146,6 @@ var dnssecDSRecordsCmd = &cobra.Command{
 			return fmt.Errorf("DNSSEC is not enabled for %s", domain)
 		}
 
-		// Honour --output like every other command: registrar automation reads
-		// these values, and plain text only was not machine-consumable.
 		format, _ := cmd.Flags().GetString("output")
 		if format != "" && format != "table" {
 			return writeFormatted(cmd, format, map[string]interface{}{

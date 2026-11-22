@@ -5,18 +5,11 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/nexdns/cli)](go.mod)
 [![Docker pulls](https://img.shields.io/docker/pulls/nexdns/cli)](https://hub.docker.com/r/nexdns/cli)
 
-`nexdns` is the official command-line tool for [NexDNS](https://nexdns.tech) – a managed DNS hosting platform with a REST API, managed DNSSEC, outbound event webhooks, and ISPmanager / DNSmanager API compatibility.
+`nexdns` is the official command-line tool for [NexDNS](https://nexdns.tech), a managed DNS hosting platform with a REST API, managed DNSSEC, outbound event webhooks, and ISPmanager / DNSmanager API compatibility.
 
-It is a single static binary that talks to the NexDNS REST API. Everything you can do to a zone in the panel you can do from a shell, a Makefile, or a CI job: create zones, edit records, import a BIND zone file, turn on DNSSEC and read back the DS records for your registrar, reconcile a whole account against a YAML file, and answer ACME DNS-01 challenges while a certificate is issued.
+It is a single static binary that talks to the NexDNS REST API. It can create zones, edit records, import a BIND zone file, turn on DNSSEC and read back the DS records for your registrar, reconcile a whole account against a YAML file, and answer ACME DNS-01 challenges while a certificate is issued.
 
-**Who it is for**
-
-- **DevOps and platform engineers** who want DNS in the same review-and-merge flow as the rest of their infrastructure.
-- **CI/CD pipelines** – no interactive prompts, machine-readable output on every data command, and exit codes that distinguish a usage mistake from a failed operation.
-- **Anyone migrating in** from another provider: export a BIND zone file there, `nexdns zone import` here, verify with `nexdns zone check`, then repoint the delegation.
-- **Certificate automation** – wildcard certificates via DNS-01 without handing an ACME client a full-access key.
-
-**What you need**
+**Requirements**
 
 An account on a plan that includes API access, and an API key created at [nexdns.tech/settings/api-keys](https://nexdns.tech/settings/api-keys). DNSSEC, webhooks, secondary (slave) zones and white-label nameservers start above the entry plan; reverse zones are on every plan. The [pricing page](https://nexdns.tech/pricing) has the current matrix.
 
@@ -42,7 +35,7 @@ An account on a plan that includes API access, and an API key created at [nexdns
 curl -sL https://get.nexdns.tech/cli | sh
 ```
 
-Detects your platform, downloads the matching archive from the same host that served the script, verifies it against the `checksums.txt` published beside it, and installs to `/usr/local/bin`. Read it first with `curl https://get.nexdns.tech/cli` if you would rather not pipe an unread script to a shell - the same file is in this repository at [`scripts/install.sh`](scripts/install.sh).
+Detects your platform, downloads the matching archive from the same host that served the script, verifies it against the `checksums.txt` published beside it, and installs to `/usr/local/bin`. The script is [`scripts/install.sh`](scripts/install.sh) in this repository.
 
 `https://get.nexdns.tech/cli/latest` names the version currently served, and `https://get.nexdns.tech/cli/download/<version>/` holds the archives and their `checksums.txt`.
 
@@ -143,7 +136,7 @@ Every command accepts the [global flags](#global-flags). `nexdns <group> --help`
 | `nexdns account info` | Account details |
 | `nexdns account api-keys` | List the API keys on the account |
 
-API keys carry scopes: `zones.read`, `zones.write`, `records.read`, `records.write`, `webhooks.read`, `webhooks.write`. Give each automation the least-privilege key it needs – a deploy pipeline that only writes records does not need `zones.write`. DNSSEC commands ride on the zone scopes: reading status needs `zones.read`, enabling or disabling needs `zones.write`.
+API keys carry scopes: `zones.read`, `zones.write`, `records.read`, `records.write`, `webhooks.read`, `webhooks.write`. Give each automation only the scopes it needs: a pipeline that only writes records does not need `zones.write`. DNSSEC commands ride on the zone scopes: reading status needs `zones.read`, enabling or disabling needs `zones.write`.
 
 ### Zones
 
@@ -151,7 +144,7 @@ API keys carry scopes: `zones.read`, `zones.write`, `records.read`, `records.wri
 | --- | --- |
 | `nexdns zone list` | List zones. `--search`, `--page`, `--per-page`, `--all` to walk every page |
 | `nexdns zone add <domain>` | Create a zone. `--type master\|slave`, `--master-ip`, `--ns-group` |
-| `nexdns zone ensure <domain>` | Create it only if it does not exist – safe to re-run |
+| `nexdns zone ensure <domain>` | Create it only if it does not exist (safe to re-run) |
 | `nexdns zone info <domain>` | Nameservers, SOA, record count, DNSSEC state |
 | `nexdns zone export <domain>` | Export as a BIND zone file. `--format bind\|json` |
 | `nexdns zone import <domain> <file>` | Import a BIND zone file. `--replace`, `--dry-run` |
@@ -165,21 +158,21 @@ nexdns zone add example.com --ns-group <slug>
 nexdns zone export example.com > example.com.zone
 ```
 
-Internationalized zones are echoed back in their native spelling rather than as `xn--` punycode, so a zone does not change how it is written between the command that created it and the one that lists it.
+Internationalized zones are shown in their native spelling rather than as `xn--` punycode.
 
-**Importing.** `zone import` creates the zone if it is missing, skips records that already match, and reports apex NS records as skipped rather than failing on them – the nameservers of the zone are managed by NexDNS. `--dry-run` prints the plan and changes nothing. `--replace` additionally deletes records that the file does not define, never touching the apex SOA or NS.
+**Importing.** `zone import` creates the zone if it is missing, skips records that already match, and reports apex NS records as skipped, since NexDNS manages the zone's nameservers. `--dry-run` prints the plan and changes nothing. `--replace` additionally deletes records that the file does not define, never touching the apex SOA or NS.
 
 ```bash
 nexdns zone import example.com ./example.com.zone --dry-run
 #   + A www 203.0.113.10 (TTL 300)
-#   ~ 2 apex NS record(s) skipped – nameservers are managed by NexDNS
+#   ~ 2 apex NS record(s) skipped: nameservers are managed by NexDNS
 #   1 to add, 12 unchanged. Run without --dry-run to apply.
 nexdns zone import example.com ./example.com.zone
 ```
 
 **Checking propagation.** `zone check` asks four public resolvers (Google, Cloudflare, Quad9, OpenDNS) for the zone's NS records, and for the apex A and MX records when the zone has them. It exits non-zero if any check fails, so a migration pipeline can gate on it.
 
-**Moving between nameserver groups.** The zone keeps answering throughout: the new group's nameservers are provisioned before the command returns, and the old ones keep serving while resolvers refresh. Update the delegation at your registrar afterwards to the nameservers `nexdns zone info` prints. The slug is validated against the groups available on your account, and the CLI lists them if it does not match, so a typo is named rather than returned as a generic validation error.
+**Moving between nameserver groups.** The zone keeps answering throughout: the new group's nameservers are provisioned before the command returns, and the old ones keep serving while resolvers refresh. Update the delegation at your registrar afterwards to the nameservers `nexdns zone info` prints. The slug is checked against the groups available on your account, and the CLI lists them if it does not match.
 
 ```bash
 nexdns zone move example.com <ns-group> --dry-run
@@ -212,9 +205,9 @@ nexdns record add example.com DS child \
   --keytag 12345 --algorithm 13 --digest-type 2
 ```
 
-`--ttl` is only sent when you pass it explicitly. A TTL belongs to the whole rrset, so omitting the flag leaves the existing TTL alone instead of silently retiming every other value at that name.
+`--ttl` is only sent when you pass it. A TTL belongs to the whole rrset, so without the flag the existing TTL is kept.
 
-`record ensure` is the idempotent form: it skips when an exact type + name + content match already exists and creates otherwise, so it is safe on round-robin sets, where it will not touch existing records that hold different content.
+`record ensure` is the idempotent form: it creates the record unless an exact type + name + content match exists, and leaves the other values of a round-robin set alone.
 
 ```bash
 # Safe to run on every deploy
@@ -231,7 +224,7 @@ nexdns record ensure example.com A app 203.0.113.21
 | `nexdns dnssec ds-records <domain>` | Print the DS records again, in any output format |
 | `nexdns dnssec disable <domain>` | Unsign the zone. `--force` skips the prompt |
 
-Keys are generated and the zone is signed on the NexDNS nameservers – there is nothing to install or hold locally. What you do have to do is publish the DS records at your registrar, which is what closes the chain of trust.
+Keys are generated and the zone is signed on the NexDNS nameservers; nothing is installed locally. Publish the DS records at your registrar to complete the chain of trust.
 
 ```bash
 nexdns dnssec enable example.com
@@ -266,7 +259,7 @@ nexdns webhook create https://example.com/hooks/dns \
   --description "production"
 # Webhook created (ID: xK9mPq2R)
 # Signing secret: whk_ExampleSigningSecretNotARealOne1234567890
-# Store the secret now – it is not shown again.
+# Store the secret now; it is not shown again.
 
 # Queue a test event, then read the delivery attempts back
 nexdns webhook test xK9mPq2R
@@ -285,7 +278,7 @@ Event types:
 | `dnssec.enabled` | `dnssec.disabled` | |
 | `zone.health.problem` | `zone.health.resolved` | |
 
-`webhook test` queues the event rather than delivering it synchronously: a success means the platform accepted it, and `webhook show` is where you read the outcome. Requires an API key with the `webhooks.read` / `webhooks.write` scopes.
+`webhook test` queues the event; `webhook show` reports the delivery result. Requires an API key with the `webhooks.read` / `webhooks.write` scopes.
 
 ## DNS-as-Code
 
@@ -310,7 +303,7 @@ zones:
 
 ```bash
 nexdns diff                    # what would change
-nexdns apply                   # same thing – apply is a dry run until you confirm
+nexdns apply                   # the same: apply is a dry run until --confirm
 nexdns apply --confirm         # write it
 nexdns apply --confirm --delete  # also remove records the file does not define
 nexdns apply --confirm --zone example.com   # one zone out of a multi-zone file
@@ -325,12 +318,12 @@ nexdns pull example.com > nexdns.yaml       # generate the file from what is liv
 | `--delete` | `apply`, `diff` | Remove remote records the file does not define |
 | `--append` | `pull` | Append to `--file` instead of overwriting |
 
-**Behaviour worth knowing before you put this in CI**
+**Notes**
 
 - A zone named in the file but absent on the account is **created** by `apply --confirm`. `dnssec: true` enables signing on a zone that is not yet signed; it is not turned off by setting it back to `false`.
-- `pull` omits the apex SOA and NS records, because they are managed for you – so a `pull` followed by an `apply` is a no-op rather than a fight over the zone's own nameservers.
-- `--zone` naming something the file does not define is an **error**, not an empty run. A typo in a pipeline should not look like a converged apply.
-- `${VAR}` references anywhere in the file are substituted from the environment, and a reference with no value **fails the parse** instead of publishing the literal `${VAR}` as a record value.
+- `pull` omits the apex SOA and NS records, which are managed for you, so `pull` followed by `apply` changes nothing.
+- `--zone` naming a zone the file does not define is an error.
+- `${VAR}` references are substituted from the environment; a variable with no value is an error.
 - `apply --confirm` exits non-zero if any operation failed, after attempting them all and printing which ones failed.
 
 ```yaml
@@ -377,9 +370,9 @@ nexdns acme hook --action create --domain example.com --token "<validation-token
 nexdns acme hook --action delete --domain example.com --token "<validation-token>"
 ```
 
-For certbot there is also a native plugin that needs no shell hooks – see [certbot-dns-nexdns](https://github.com/nexdns/certbot-dns-nexdns). Full walkthrough at [nexdns.tech/docs/acme](https://nexdns.tech/docs/acme).
+For certbot there is also a native plugin that needs no shell hooks: [certbot-dns-nexdns](https://github.com/nexdns/certbot-dns-nexdns). Full walkthrough at [nexdns.tech/docs/acme](https://nexdns.tech/docs/acme).
 
-Issue the key this runs with with `records.read` + `records.write` only. An ACME hook has no business being able to delete a zone.
+Give the key this runs with `zones.read`, `records.read` and `records.write` only.
 
 ## Output formats and scripting
 
@@ -396,10 +389,10 @@ nexdns zone info example.com -o yaml
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | The operation failed – API error, network failure, a failed propagation check |
-| `2` | Usage error – unknown command or flag, wrong number of arguments |
+| `1` | The operation failed: API error, network failure, a failed propagation check |
+| `2` | Usage error: unknown command or flag, wrong number of arguments |
 
-A misspelled subcommand fails with code `2` rather than printing help and succeeding, so a typo in a pipeline is a scriptable error and not a silent no-op.
+A misspelled subcommand also exits with `2`.
 
 ```bash
 # Bulk-retime every A record in a zone
@@ -423,7 +416,7 @@ done
 
 ## Configuration
 
-Settings resolve in increasing priority: **built-in default → config file → environment variable → explicitly set flag.**
+Settings resolve in increasing priority: built-in default, config file, environment variable, explicitly set flag.
 
 ### Environment variables
 
@@ -433,7 +426,7 @@ Settings resolve in increasing priority: **built-in default → config file → 
 | `NEXDNS_API_URL` | API base URL |
 | `NEXDNS_CONFIG` | Config file path |
 | `NEXDNS_TIMEOUT` | HTTP timeout in seconds |
-| `NO_COLOR` | Present at any value – disables colour |
+| `NO_COLOR` | Disables colour when set to any value |
 | `HTTPS_PROXY`, `HTTP_PROXY` | Honoured by Go's HTTP client, no extra configuration |
 
 ### Config file
@@ -473,10 +466,10 @@ timeout: 30
 
 ## Migrating from another provider
 
-**BIND zone import / export** – migrate from any provider that speaks BIND zone-file format (Route 53, Cloudflare, DNSmanager, PowerDNS, BIND, NSD). The path is the same whichever one you are leaving: get a zone file out of it, import, verify, repoint.
+To migrate from any provider that speaks BIND zone-file format (Route 53, Cloudflare, DNSmanager, PowerDNS, BIND, NSD), export the zone file, import it, verify, then repoint the delegation.
 
 ```bash
-# 1. Import (dry run first – it prints exactly what it would create)
+# 1. Import, with a dry run first
 nexdns zone import example.com ./example.com.zone --dry-run
 nexdns zone import example.com ./example.com.zone
 
@@ -531,13 +524,13 @@ The zone is not on this account, or the key lacks `zones.read`. `nexdns zone lis
 The key is missing a scope. Writes need `zones.write` / `records.write`; webhooks need their own pair. `nexdns account api-keys` lists the keys and what each one carries.
 
 **Rate limiting on a bulk import**
-Handled for you: the client reads the rate-limit budget from each response and waits for a short window to roll over rather than spending attempts on rejections, so a large import slows down instead of losing records. A window too long to wait out is reported with the reason and how long is left, rather than hanging.
+The client reads the rate-limit headers and waits for a short window to reset, so a large import slows down instead of failing. A longer limit is reported with the time left.
 
 **Transient network or 5xx failures**
-Read requests are retried, up to three attempts in total, with exponential backoff and jitter. Writes are not retried automatically – replaying a create that may already have been applied would double-submit – so a failed write is reported for you to decide about.
+Read requests are retried, up to three attempts in total, with exponential backoff and jitter. Writes are not retried, since a failed write may already have been applied; the error is reported instead.
 
 **Seeing what is actually on the wire**
-`--verbose` prints each request, its status, the duration, and the rate-limit headers. Nothing else changes.
+`--verbose` prints each request, its status, the duration, and the rate-limit headers.
 
 ```bash
 nexdns zone list --verbose
@@ -558,21 +551,7 @@ Download the `windows` archive from the [releases page](https://github.com/nexdn
 | [Certbot plugin](https://github.com/nexdns/certbot-dns-nexdns) | Certbot issues your certificates and you want a native DNS-01 plugin instead of shell hooks |
 | [Homebrew tap](https://github.com/nexdns/homebrew-tap) | Installing and updating the CLI on macOS or Linux |
 
-`nexdns apply` is the lighter-weight option when DNS is managed on its own: one binary, one YAML file, no state file to keep.
-
-### Other DNS command-line tools
-
-Each of these drives its own platform, and they are listed so you can tell at a glance which tool belongs to which:
-
-| Tool | Manages |
-| --- | --- |
-| **`nexdns`** | Zones and records on a NexDNS account |
-| `cli53` | AWS Route 53 |
-| `aws route53` | AWS Route 53 |
-| `flarectl` | Cloudflare |
-| `doctl compute dns` | DigitalOcean |
-| `pdnsutil` | Self-hosted PowerDNS |
-| [octodns-nexdns](https://github.com/nexdns/octodns-nexdns) | NexDNS through OctoDNS, alongside other providers |
+For DNS-as-Code without Terraform, `nexdns apply` needs no state file.
 
 ## Links
 
@@ -584,7 +563,7 @@ Each of these drives its own platform, and they are listed so you can tell at a 
 - **Issues and feature requests**: [GitHub Issues](https://github.com/nexdns/cli/issues)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
-Found a security issue? Please do not open a public issue – report it through [nexdns.tech/contact](https://nexdns.tech/contact) so it can be fixed before it is public.
+Report security issues through [nexdns.tech/contact](https://nexdns.tech/contact), not in a public issue.
 
 ## License
 

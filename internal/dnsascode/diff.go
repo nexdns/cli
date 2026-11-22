@@ -7,15 +7,9 @@ import (
 	"github.com/nexdns/cli/internal/api"
 )
 
-// normalizeContent renders record content in a form that is comparable between
-// nexdns.yaml and the API.
-//
-// The API stores composed rdata – "10 mail.example.com." for MX,
-// `"v=spf1 -all"` for TXT, "10 60 5060 sip.example.net." for SRV,
-// `0 issue "letsencrypt.org"` for CAA – while a hand-written config carries the
-// parts in separate fields and omits the quoting. Comparing the raw strings made
-// those types differ on every run, so `apply` kept rewriting records that were
-// already correct and `diff` never reached "no changes".
+// normalizeContent puts record content in a form that compares equal between
+// nexdns.yaml and the API, which stores composed rdata such as
+// "10 mail.example.com." for MX and `"v=spf1 -all"` for TXT.
 func normalizeContent(content string) string {
 	fields := strings.Fields(strings.ReplaceAll(content, `"`, ""))
 	for i, f := range fields {
@@ -87,7 +81,7 @@ func ComputeDiff(zone string, local []RecordConfig, remote []api.Record, deleteR
 		remotes := remoteMap[key]
 
 		if len(remotes) == 0 {
-			// No remote match – add
+			// No remote match: add
 			ops = append(ops, Operation{
 				Action:   "add",
 				Zone:     zone,
@@ -137,7 +131,7 @@ func ComputeDiff(zone string, local []RecordConfig, remote []api.Record, deleteR
 		}
 
 		if !found {
-			// Type+name match exists but content differs – update the first unmatched remote record
+			// Content differs: update the first unmatched remote record.
 			for _, rr := range remotes {
 				if !matched[rr.ID] {
 					matched[rr.ID] = true
@@ -208,10 +202,8 @@ func needsUpdate(local RecordConfig, remote api.Record) bool {
 	if localTTL != remote.TTL {
 		return true
 	}
-	// The priority is part of the stored content and was already compared there.
-	// The API exposes it under `fields`, not as a top-level attribute, so a nil
-	// remote priority means "not surfaced", not "differs" – treating it as a
-	// difference made every MX and SRV record update on every run.
+	// Priority is part of the content compared above. The API returns it under
+	// fields, so a nil remote priority is not a difference.
 	if local.Priority != nil && remote.Priority != nil && *local.Priority != *remote.Priority {
 		return true
 	}

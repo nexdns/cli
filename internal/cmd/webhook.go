@@ -10,10 +10,7 @@ import (
 	"github.com/nexdns/cli/internal/api"
 )
 
-// eventsHelp lists the subscribable event types. The API is authoritative and
-// rejects an unknown one, so this is documentation rather than a client-side
-// allowlist - a stale copy here must never be able to refuse an event the
-// platform has started emitting.
+// eventsHelp lists the event types for --help. The API validates them.
 const eventsHelp = `Event types:
   zone.created            zone.updated            zone.deleted
   record.created          record.updated          record.deleted
@@ -124,7 +121,7 @@ Examples:
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Webhook created (ID: %s)\n", created.ID)
 		fmt.Fprintf(cmd.OutOrStdout(), "Signing secret: %s\n", created.Secret)
-		fmt.Fprintln(cmd.OutOrStdout(), "Store the secret now – it is not shown again.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Store the secret now; it is not shown again.")
 		return nil
 	},
 }
@@ -283,8 +280,7 @@ platform accepted it. Read the outcome back with "nexdns webhook show".`,
 	},
 }
 
-// eventsFlag reads --events as a comma-separated list, rejecting an empty one so
-// the API is not asked to create a subscription to nothing.
+// eventsFlag reads --events as a comma-separated list and rejects an empty one.
 func eventsFlag(cmd *cobra.Command) ([]string, error) {
 	raw, _ := cmd.Flags().GetString("events")
 

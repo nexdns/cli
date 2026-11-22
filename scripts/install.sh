@@ -3,11 +3,7 @@
 # Usage: curl -sL https://get.nexdns.tech/cli | sh
 set -e
 
-# Everything is fetched from the instance that served this script. The script
-# itself already runs unconditionally on the caller's machine, so the binary it
-# installs should not come from a different party than the script did - and an
-# install must not fail because a third-party host is unreachable from the
-# caller's network.
+# The archive and its checksums come from the host that served this script.
 HOST="get.nexdns.tech"
 BINARY="nexdns"
 INSTALL_DIR="/usr/local/bin"
@@ -38,9 +34,6 @@ case "$OS" in
         ;;
 esac
 
-# Ask the instance which version it holds. It answers with what is on its own
-# disk, so the version named here is one it can also serve; an instance that is
-# behind installs an older CLI rather than pointing at an archive it lacks.
 echo "Detecting latest version..."
 LATEST=$(curl -fsSL "https://${HOST}/cli/latest" | tr -d ' \t\r\n')
 
@@ -61,23 +54,13 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 if ! curl -fsSL "$URL" -o "${TMP_DIR}/${FILENAME}"; then
     echo "Error: could not download ${URL}"
-    echo "  ${HOST} named ${LATEST} moments ago. Either it is being"
-    echo "  re-published right now - retry in a minute - or that release was"
-    echo "  built without a ${OS}/${ARCH} archive."
     exit 1
 fi
 
-# Verify against the checksums file published beside the archive. Every branch
-# below ends the run rather than continuing: this script is piped to a shell, so
-# bytes that could not be checked do not get installed. sha256sum is the GNU
-# spelling, shasum the BSD/macOS one.
+# Nothing is installed unless the checksum can be verified.
 echo "Verifying checksum..."
 if ! curl -fsSL "${BASE_URL}/checksums.txt" -o "${TMP_DIR}/checksums.txt"; then
     echo "Error: could not download ${BASE_URL}/checksums.txt"
-    echo "  ${HOST} named ${LATEST} moments ago, and it only names a version"
-    echo "  whose manifest is in place, so this is most likely a release being"
-    echo "  re-published right now. Retry in a minute. If it persists, the"
-    echo "  server's artifacts directory is incomplete and needs re-syncing."
     exit 1
 fi
 
@@ -94,7 +77,6 @@ fi
 EXPECTED=$(grep " ${FILENAME}\$" "${TMP_DIR}/checksums.txt" | cut -d" " -f1)
 if [ -z "$EXPECTED" ]; then
     echo "Error: ${FILENAME} is not listed in checksums.txt"
-    echo "  The manifest on ${HOST} does not describe the archive beside it."
     exit 1
 fi
 if [ "$SUM" != "$EXPECTED" ]; then

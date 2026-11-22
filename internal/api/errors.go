@@ -15,10 +15,8 @@ type APIError struct {
 	Details    ValidationField `json:"details,omitempty"`
 }
 
-// ValidationField holds the API's per-field validation messages. The value is a
-// list of messages, but a single string is accepted too: older endpoints emit
-// `{"field": "message"}` and a strict list-only type made the whole error body
-// fail to decode, which reduced a detailed 400 to "API error (HTTP 400)".
+// ValidationField holds the messages for each field. The API sends either a
+// list of messages or a single string.
 type ValidationField map[string][]string
 
 func (d *ValidationField) UnmarshalJSON(data []byte) error {
@@ -40,7 +38,7 @@ func (d *ValidationField) UnmarshalJSON(data []byte) error {
 			out[field] = []string{single}
 			continue
 		}
-		// Anything else (numbers, objects) is kept verbatim rather than dropped.
+		// Any other JSON value is kept as raw text.
 		out[field] = []string{string(value)}
 	}
 

@@ -214,12 +214,6 @@ func Resolve(cmd *cobra.Command) (*Config, error) {
 	if cmd.Flags().Changed("timeout") {
 		resolved.Timeout, _ = cmd.Flags().GetInt("timeout")
 	}
-	if cmd.Flags().Changed("quiet") {
-		// quiet is handled per-command, just ensure it's accessible
-	}
-	if cmd.Flags().Changed("verbose") {
-		// verbose is handled per-command, just ensure it's accessible
-	}
 
 	// NO_COLOR override
 	if _, ok := os.LookupEnv("NO_COLOR"); ok {

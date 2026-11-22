@@ -52,9 +52,7 @@ var authTokenCmd = &cobra.Command{
 			return fmt.Errorf("saving token: %w", err)
 		}
 
-		// Persist the endpoint the token was verified against. Without this every
-		// later command fell back to the default API URL, so a token issued on
-		// another instance was silently sent to the wrong one.
+		// Save the API URL the token was verified against.
 		if cmd.Flags().Changed("api-url") {
 			if err := config.SetAPIUrl(path, cfg.APIUrl); err != nil {
 				return fmt.Errorf("saving api-url: %w", err)

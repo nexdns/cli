@@ -71,9 +71,7 @@ dns_nexdns_rm() {
     return 1
   fi
 
-  #All the challenge records share one name and one type, so the value is the
-  #only thing that tells them apart. A certificate covering example.com and
-  #*.example.com puts two of them at the same name at the same time.
+  #example.com and *.example.com put two challenge records at one name, so match the value.
   _record_id="$(echo "$response" | tr '{' "\n" | grep -- "$txtvalue" | _egrep_o '"id":"[^"]*"' | _head_n 1 | cut -d '"' -f 4)"
   _debug _record_id "$_record_id"
 
@@ -136,8 +134,7 @@ _get_root() {
       return 1
     fi
 
-    #search matches on a substring, so the page can also hold zones that merely
-    #contain h. Take the id of the one whose name is exactly h.
+    #search matches substrings; take the zone whose name is exactly h.
     _domain_id="$(echo "$response" | tr '{' "\n" | grep "\"name\":\"$h\"" | _egrep_o '"id":"[^"]*"' | _head_n 1 | cut -d '"' -f 4)"
     if [ "$_domain_id" ]; then
       _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
@@ -174,11 +171,7 @@ _nexdns_rest() {
     return 1
   fi
 
-  #A single certificate costs a handful of requests, but a renewal sweep over
-  #many of them meets the account's per-minute budget, and that run is
-  #unattended. Retry-After is treated as a floor: an api may report the time one
-  #token needs at an average rate and name a second when nothing frees for a
-  #minute, so the wait grows on its own across attempts.
+  #Rate limited: wait and retry. Retry-After is a floor; the backoff grows per attempt.
   if [ "$(grep "^HTTP" "$HTTP_HEADER" 2>/dev/null | _tail_n 1 | cut -d " " -f 2 | tr -d "\r\n")" = "429" ]; then
     if [ "$attempt" -ge 4 ]; then
       _err "$m $ep failed: rate limited, and the wait budget is spent"
@@ -187,10 +180,7 @@ _nexdns_rest() {
 
     _retry_after="$(grep -i "^Retry-After" "$HTTP_HEADER" 2>/dev/null | _tail_n 1 | cut -d : -f 2 | tr -d " \r\n")"
     _backoff="$(_math "$attempt" \* 15)"
-    #The header may also carry an http date. Anything but a plain count of
-    #seconds falls through to the backoff rather than being parsed: guessing
-    #wrong about a date is worse than waiting a known interval, and comparing a
-    #date numerically would abort the hook outright.
+    #Retry-After may be an http date; anything but plain seconds uses the backoff.
     case "$_retry_after" in
     "" | *[!0-9]*) _retry_after="$_backoff" ;;
     *)
@@ -200,9 +190,7 @@ _nexdns_rest() {
       ;;
     esac
 
-    #A wait longer than this is a refusal rather than a schedule, and sleeping
-    #it out would hold the hook for the length of the window. Hand the run back
-    #instead, so the next cron pass picks it up.
+    #Do not hold the hook for a long window; the next cron run retries.
     if [ "$_retry_after" -gt 120 ]; then
       _err "$m $ep failed: rate limited for ${_retry_after}s, longer than this hook will wait"
       return 1
@@ -215,15 +203,12 @@ _nexdns_rest() {
     return $?
   fi
 
-  #Whitespace between a key and its value would defeat every match made on the
-  #body, here and in the callers.
+  #Strip whitespace so the matches here and in the callers work.
   response="$(echo "$response" | _normalizeJson)"
   _debug2 response "$response"
 
-  #The status line decides success, not the body: a delete answers 204 with no
-  #body at all, and a record whose own content contains "error": would otherwise
-  #turn a stored value into a reported failure. The body is read only for the
-  #message once the status says the request was rejected.
+  #Success is decided by the status code: a delete returns 204 with no body, and
+  #a record value may itself contain "error".
   _code="$(grep "^HTTP" "$HTTP_HEADER" 2>/dev/null | _tail_n 1 | cut -d " " -f 2 | tr -d "\r\n")"
   _debug2 _code "$_code"
   case "$_code" in
@@ -232,8 +217,7 @@ _nexdns_rest() {
     ;;
   esac
 
-  #A rejected request carries {"error":{"code":..,"message":..}}, so say what the
-  #api says went wrong.
+  #Error body: {"error":{"code":..,"message":..}}
   _message="$(echo "$response" | _egrep_o '"message":"[^"]*"' | _head_n 1 | cut -d '"' -f 4)"
   if [ -z "$_message" ]; then
     _message="status $_code"

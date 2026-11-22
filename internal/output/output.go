@@ -22,9 +22,7 @@ type Formatter interface {
 	FormatMessage(msg string)
 }
 
-// New creates a Formatter for the given format. An unknown colour mode is
-// refused here as well: it used to be accepted silently and fall through to
-// auto-detection, so `--color allways` looked like it had worked.
+// New returns the Formatter for format. An unknown colour mode is an error.
 func New(format string, w io.Writer, quiet bool, colorMode string) (Formatter, error) {
 	if err := ValidateFormat(format); err != nil {
 		return nil, err

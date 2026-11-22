@@ -59,3 +59,11 @@ func (c *Client) UpdateRecord(ctx context.Context, zoneID, recordID string, req 
 func (c *Client) DeleteRecord(ctx context.Context, zoneID, recordID string) error {
 	return c.do(ctx, "DELETE", "/zones/"+zoneID+"/records/"+recordID, nil, nil)
 }
+
+// OptionalTTL maps a zero TTL (none given) to nil, so the API keeps the rrset's TTL.
+func OptionalTTL(ttl int) *int {
+	if ttl == 0 {
+		return nil
+	}
+	return &ttl
+}

@@ -22,9 +22,10 @@ func NewCSVFormatter(w io.Writer) *CSVFormatter {
 
 func (f *CSVFormatter) writeCSV(header []string, rows [][]string) {
 	cw := csv.NewWriter(f.w)
-	cw.Write(header)
+	// csv.Writer keeps write errors in Error(); writeCSV has no way to return them.
+	_ = cw.Write(header)
 	for _, row := range rows {
-		cw.Write(row)
+		_ = cw.Write(row)
 	}
 	cw.Flush()
 }
@@ -137,8 +138,8 @@ func (f *CSVFormatter) FormatWebhooks(webhooks []api.Webhook) {
 	f.writeCSV(header, rows)
 }
 
-// FormatWebhook emits the deliveries when the detail view has them: a single
-// webhook as one CSV row carries less than the attempts that explain its state.
+// FormatWebhook writes the delivery attempts when the detail view has them,
+// and the webhook row otherwise.
 func (f *CSVFormatter) FormatWebhook(webhook *api.Webhook) {
 	if len(webhook.RecentDeliveries) == 0 {
 		f.FormatWebhooks([]api.Webhook{*webhook})
