@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Homebrew cask installs on Linux. Its quarantine step ran macOS's `xattr`,
+  which Linux does not have, and failed the install. The 1.0.2 cask in the tap
+  already carries the fix.
+- The README installs with `brew install --cask nexdns/tap/nexdns-cli`. Current
+  Homebrew refuses a cask from a tap added with a separate `brew tap` until the
+  tap is trusted; the full name installs directly.
+
 ## [1.0.2] - 2026-11-22
 
 ### Security
@@ -30,8 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `nexdns version` reports the real version when the CLI was installed with
-  `go install`, using the module version and commit that Go records in the
-  binary. It used to print `dev`.
+  `go install`, using the module version that Go records in the binary. It used
+  to print `dev`.
 
 ## [1.0.0] - 2026-07-31
 

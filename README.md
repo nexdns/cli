@@ -42,8 +42,7 @@ Detects your platform, downloads the matching archive from the same host that se
 ### Homebrew (macOS, Linux)
 
 ```bash
-brew tap nexdns/tap
-brew install --cask nexdns-cli
+brew install --cask nexdns/tap/nexdns-cli
 ```
 
 ### Go install
